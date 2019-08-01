@@ -1,7 +1,5 @@
 # scachepy
-Caching extension for Scanpy
-
-## Installation
+Caching extension for Scanpy.
 
 ## Installation
 ```bash
@@ -15,5 +13,6 @@ import scachepy
 c = scachepy.Cache(<directory>)
 
 c.pp.pca(...)
+c.pp.neighbors(...)
 ...
 ```
