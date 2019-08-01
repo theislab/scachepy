@@ -4,7 +4,6 @@ Caching extension for Scanpy
 ## Installation
 
 ## Installation
-To install this package, do the following:
 ```bash
 pip install git+https://github.com/michalk8/scachepy
 ```
