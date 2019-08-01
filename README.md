@@ -15,4 +15,5 @@ import scachepy
 c = scachepy.Cache(<directory>)
 
 c.pp.pca(...)
+...
 ```
