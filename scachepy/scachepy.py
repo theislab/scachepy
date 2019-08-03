@@ -292,24 +292,36 @@ class Cache():
             if len(args) > 1:
                 callback, *args = args
 
-            if len(args) > 0:
-                adata = args[0] if isinstance(args[0], (anndata.AnnData, anndata.base.Raw)) else kwargs.get('adata')
+            is_raw = False
+            if len(args) > 0 and isinstance(args[0], (anndata.AnnData, anndata.Raw)):
+                if isinstance(args[0], anndata.Raw):
+                    args = (args[0]._adata, *args[1:])
+                    is_raw = True
+                adata = args[0]
+            elif 'adata' in kwargs:
+                if isinstance(kwargs['adata'], anndata.Raw):
+                    kwargs['adata'] = kwargs['adata']._adata
+                    is_raw = True
+                adata = kwargs['adata']
             else:
-                adata = kwargs.get('adata')
+                raise ValueError(f'Unable to locat adata object in args or kwargs.')
 
-            assert isinstance(adata, (anndata.AnnData, anndata.base.Raw)), f'Expected `{adata}` to be of type `anndata.AnnData`.'
+            # at this point, it's impossible for adata to be of type anndata.Raw
+            # but the message should tell it's possible for it to be an input
+            assert isinstance(adata, (anndata.AnnData, )), f'Expected `{adata}` to be of type `anndata.AnnData` or `anndata.Raw`.'
 
             if callback is None:
                 callback = default_fn
-
             assert callable(callback), f'`{callblack}` is not callable.'
 
             if force:
                 if verbose:
                     print('Forced computing values.')
                 res = callback(*args, **kwargs)
-                cache_fn(res if copy else adata, fname, True, verbose, *args, **kwargs)
-                return res
+                ret = cache_fn(res if copy else adata, fname, True, verbose, *args, **kwargs)
+                assert ret, 'Caching failed.'
+
+                return anndata.Raw(res) if is_raw and res is not None else res
 
             # when loading to cache and copy is true, modify the copy
             if copy:
@@ -324,10 +336,16 @@ class Cache():
                 ret = cache_fn(res if copy else adata, fname, True, False, *args, **kwargs)
                 assert ret, 'Caching failed.'
 
-                return res
+                return anndata.Raw(res) if is_raw and res is not None else res
 
             # if cache was found and not modifying inplace
-            return adata if copy else None
+            if not copy:
+                return None
+
+            if is_raw:
+                return anndata.Raw(adata)
+
+            return adata
 
         default_fn = kwargs.pop('default_fn', lambda *_x, **_y: None)
         cache_fn = self._create_cache_fn(*args, **kwargs)
