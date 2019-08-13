@@ -54,6 +54,11 @@ class PickleBackend(Backend):
             attrs_keys, vals = zip(*pickle.load(fin))
 
             for (attr, key), val in zip(attrs_keys, vals):
+                if val is None:
+                    if verbose:
+                        print(f'Cache contains empty value for attribute `{attr}`, key `{key}`. This could have happened when caching these values failed.')
+                    continue
+
                 if key is None or isinstance(key, str):
                     key = (key, )
 
@@ -101,8 +106,8 @@ class PickleBackend(Backend):
                 for k in keys:
                     obj = obj[k]
             except (AttributeError, KeyError):
-                print(f'Unable to find keys `{keys}`. Skipping.')
-                return obj
+                print(f'Unable to find keys `{", ".join(map(str, keys))}`. Skipping.')
+                return None
 
             return obj
 
