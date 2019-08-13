@@ -91,14 +91,18 @@ class PickleBackend(Backend):
     def save(self, adata, fname, attrs, keys, *args, **kwargs):
 
         def _get_val(obj, keys):
-            if keys is None:
+            try:
+                if keys is None:
+                    return obj
+
+                if isinstance(keys, str) or not isinstance(keys, Iterable):
+                    keys = (keys, )
+
+                for k in keys:
+                    obj = obj[k]
+            except (AttributeError, KeyError):
+                print(f'Unable to find keys `{keys}`. Skipping.')
                 return obj
-
-            if isinstance(keys, str) or not isinstance(keys, Iterable):
-                keys = (keys, )
-
-            for k in keys:
-                obj = obj[k]
 
             return obj
 
