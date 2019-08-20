@@ -1,11 +1,26 @@
 import functools
 import types
 
+
+# to simulate scanpy's .pp, .tl, .pl
+class Dummy:
+
+    def __init__(self, typp, **kwargs):
+        self._typp = typp
+        for k, fn in kwargs.items():
+            setattr(self, k, fn)
+
+    def __repr__(self):
+        return f'<{self.__module__}.{self._typp}>'
+
+
 class Wrapper():
 
     def __init__(self, wrapped, def_fn=None, assigned=functools.WRAPPER_ASSIGNMENTS):
         if callable(def_fn):
             for attr in assigned:
+                if attr == '__module__':  # to have auto-complete
+                    continue
                 setattr(self, attr, getattr(def_fn, attr))
             name = f'{def_fn.__module__}.{def_fn.__name__}'
         elif def_fn is None:

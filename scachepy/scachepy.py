@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from .backends import PickleBackend
-from .utils import Wrapper
+from .utils import Dummy, Wrapper
 
 from collections import Iterable, namedtuple
 
@@ -16,15 +16,7 @@ import pickle
 import traceback
 
 
-# TODO improvements:
-# 1. simplify logic, if possible (should be)
-# 2. get docstrings working
-# 3. use module-like approach instead of the namedtuple
-# (namely because of autocompletion, code cleanliness)
-# 4. .h5ad backend?
-# 5. typing?
-
-class Cache():
+class Cache:
 
     _backends = dict(pickle=PickleBackend)
     _extensions = dict(pickle='.pickle')
@@ -86,7 +78,7 @@ class Cache():
                                      default_fname='neighs',
                                      default_fn=sc.pp.neighbors)
         }
-        self._pp = namedtuple('pp', functions.keys())(**functions)
+        self.pp = Dummy('pp', **functions)
 
     def _init_tl(self):
         functions = {
@@ -115,16 +107,19 @@ class Cache():
                                               uns_cache1=re.compile('(.+)_graph_neg$')),
                                          default_fn=scv.tl.velocity_graph,
                                          default_fname='velo_graph'),
+            'velocity_embedding': self.cache(dict(obsm=re.compile(r'^velocity_(.+)$')),
+                                             default_fn=scv.tl.velocity_embedding,
+                                             default_fname='velo_emb'),
             'draw_graph': self.cache(dict(obsm=re.compile(r'^X_draw_graph_(.+)$'),
                                           uns='draw_graph'),
                                      default_fn=sc.tl.draw_graph,
                                      default_fname='draw_graph')
         }
-        self._tl = namedtuple('tl', functions.keys())(**functions)
+        self.tl = Dummy('tl', **functions)
 
     def _init_pl(self):
         functions = dict()
-        self._pl = namedtuple('pl', functions.keys())(**functions)
+        self.pl = Dummy('pl', **functions)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(backend={self.backend}, ext='{self._ext}')"
@@ -173,31 +168,7 @@ class Cache():
 
     @backend.setter
     def backend(self, _):
-        raise RuntimeError('Setting is not allowed.') 
-
-    @property
-    def pp(self):
-        return self._pp
-
-    @pp.setter
-    def pp(self, _):
-        raise RuntimeError('Setting is not allowed.') 
-
-    @property
-    def tl(self):
-        return self._tl
-
-    @tl.setter
-    def tl(self, _):
-        raise RuntimeError('Setting is not allowed.') 
-
-    @property
-    def pl(self):
-        return self._pl
-
-    @pl.setter
-    def pl(self, _):
-        raise RuntimeError('Setting is not allowed.') 
+        raise RuntimeError('Setting is disallowed.') 
 
     def _create_cache_fn(self, *args, default_fname=None):
 
@@ -253,6 +224,7 @@ class Cache():
         attrs = tuple(pat.sub('', a) for a in attrs)
 
         return wrapper
+
 
     def cache(self, *args, wrap=True, **kwargs):
         """
