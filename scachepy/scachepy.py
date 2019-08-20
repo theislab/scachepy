@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from .backends import PickleBackend
-from .utils import ReprWrapper
+from .utils import Wrapper
 
 from collections import Iterable, namedtuple
 
@@ -60,9 +60,9 @@ class Cache():
 
     def _init_pp(self):
         functions = {
-            # TODO: not ideal - the ReprWrapper requires the function to be specified
+            # TODO: not ideal - the Wrapper requires the function to be specified
             # we also must wrap the last function as opposed to the function returned by self.cache
-            'pcarr': ReprWrapper(self._wrap_as_adata(self.cache(dict(obsm='X_pca'),
+            'pcarr': Wrapper(self._wrap_as_adata(self.cache(dict(obsm='X_pca'),
                                                                 default_fname='pca_arr',
                                                                 default_fn=sc.pp.pca, wrap=False),
                                                      ret_attr=dict(obsm='X_pca')),
@@ -165,7 +165,7 @@ class Cache():
     
             return tuple(out)
 
-        return ReprWrapper(wrapper, fn)
+        return Wrapper(wrapper, fn)
 
     @property
     def backend(self):
@@ -350,4 +350,4 @@ class Cache():
         default_fn = kwargs.pop('default_fn', lambda *_x, **_y: None)
         cache_fn = self._create_cache_fn(*args, **kwargs)
 
-        return ReprWrapper(wrapper, default_fn) if wrap else wrapper 
+        return Wrapper(wrapper, default_fn) if wrap else wrapper 

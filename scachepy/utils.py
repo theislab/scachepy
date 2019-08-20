@@ -1,18 +1,23 @@
-class ReprWrapper():
+import functools
+import types
 
-    def __init__(self, fn, def_fn):
-        self._fn = fn
+class Wrapper():
 
-        if def_fn is None:
-            name = 'None'
-        elif callable(def_fn):
+    def __init__(self, wrapped, def_fn=None, assigned=functools.WRAPPER_ASSIGNMENTS):
+        if callable(def_fn):
+            for attr in assigned:
+                setattr(self, attr, getattr(def_fn, attr))
             name = f'{def_fn.__module__}.{def_fn.__name__}'
+        elif def_fn is None:
+            name = 'None'
         else:
-            name = 'Unknown'
-        self._name = f'<caching function of "{name}">'
+            raise ValueError(f'Expected default_function to be either callable or NoneType, got: `type(def_fn)`.')
 
-    def __call__(self, *args, **kwargs):
-        return self._fn(*args, **kwargs)
+        self._name = f'<caching function of "{name}">'
+        super().__init__()
+
+    def __get__(self, obj, objtype):
+        return types.MethodType(self.__call__, obj)
 
     def __repr__(self):
         return self._name
