@@ -258,6 +258,7 @@ class Cache:
             fname = kwargs.pop('fname', None)
             force = kwargs.pop('force', False)
             verbose = kwargs.pop('verbose', True)
+            call = kwargs.pop('call', True)  # if we do not wish to call the callback
             copy = kwargs.get('copy', False)
 
             callback = None
@@ -288,10 +289,10 @@ class Cache:
 
             if force:
                 if verbose:
-                    print('Forced computing values.')
+                    print('Forcing computing values.')
                 res = callback(*args, **kwargs)
-                ret = cache_fn(res if copy else adata, fname, True, verbose, *args, **kwargs)
-                assert ret, 'Caching failed.'
+                ret = cache_fn(res if copy else adata, fname, *args, verbose=verbose, recache=True, **kwargs)
+                assert ret, 'Caching horribly failed.'
 
                 return anndata.Raw(res) if is_raw and res is not None else res
 
@@ -301,10 +302,10 @@ class Cache:
 
             # we need to pass the *args and **kwargs in order to
             # get the right field when using regexes
-            if not cache_fn(adata, fname, False, verbose, *args, **kwargs):
+            if not cache_fn(adata, fname, *args, verbose=verbose, recache=False, **kwargs):
                 if verbose:
                     print('No cache found, computing values.')
-                res = callback(*args, **kwargs)
+                res = callback(*args, **kwargs) if call else adata  # adata is maybe copy, see above
                 ret = cache_fn(res if copy else adata, fname, True, False, *args, **kwargs)
                 assert ret, 'Caching failed.'
 
