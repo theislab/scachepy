@@ -14,6 +14,7 @@ import re
 import numpy as np
 import pickle
 import traceback
+import warnings
 
 
 class Cache:
@@ -172,7 +173,7 @@ class Cache:
 
     def _create_cache_fn(self, *args, default_fname=None):
 
-        def wrapper(adata, fname=None, recache=False, verbose=True, *args, **kwargs):
+        def wrapper(adata, fname=None, recache=False, verbose=True, skip=False, *args, **kwargs):
             try:
                 if fname is None:
                     fname = default_fname
@@ -181,13 +182,15 @@ class Cache:
 
                 if recache:
                     possible_vals = set(args) | set(kwargs.values())
-                    return self.backend.save(adata, fname, attrs, keys, possible_vals=possible_vals, verbose=verbose)
+                    return self.backend.save(adata, fname, attrs, keys,
+                                             skip=skip,
+                                             possible_vals=possible_vals, verbose=verbose)
 
                 if (self.backend.dir / fname).is_file():
                     if verbose:
                         print(f'Loading data from: `{fname}`.')
 
-                    return self.backend.load(adata, fname, verbose=verbose)
+                    return self.backend.load(adata, fname, verbose=verbose, skip=skip)
 
                 return False
 
@@ -259,6 +262,7 @@ class Cache:
             force = kwargs.pop('force', False)
             verbose = kwargs.pop('verbose', True)
             call = kwargs.pop('call', True)  # if we do not wish to call the callback
+            skip = kwargs.pop('skip', False)
             copy = kwargs.get('copy', False)
 
             callback = None
@@ -290,8 +294,10 @@ class Cache:
             if force:
                 if verbose:
                     print('Forcing computing values.')
+                if not call:
+                    warnings.warn('Specifying `call=False` and `force=True` still forces the computation.')
                 res = callback(*args, **kwargs)
-                ret = cache_fn(res if copy else adata, fname, *args, verbose=verbose, recache=True, **kwargs)
+                ret = cache_fn(res if copy else adata, fname, True, verbose, skip, *args, **kwargs)
                 assert ret, 'Caching horribly failed.'
 
                 return anndata.Raw(res) if is_raw and res is not None else res
@@ -302,12 +308,12 @@ class Cache:
 
             # we need to pass the *args and **kwargs in order to
             # get the right field when using regexes
-            if not cache_fn(adata, fname, *args, verbose=verbose, recache=False, **kwargs):
+            if not cache_fn(adata, fname, False, verbose, skip, *args, **kwargs):
                 if verbose:
-                    print('No cache found, computing values.')
-                res = callback(*args, **kwargs) if call else adata  # adata is maybe copy, see above
-                ret = cache_fn(res if copy else adata, fname, True, False, *args, **kwargs)
-                assert ret, 'Caching failed.'
+                    print('No cache found, ' + ('computing values.' if call else 'searching for values.'))
+                res = callback(*args, **kwargs) if call else adata if copy else None
+                ret = cache_fn(res if copy else adata, fname, True, False, skip, *args, **kwargs)
+                assert ret, 'Caching horribly failed.'
 
                 return anndata.Raw(res) if is_raw and res is not None else res
 

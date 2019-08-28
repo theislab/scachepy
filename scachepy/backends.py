@@ -48,6 +48,7 @@ class Backend(ABC):
 class PickleBackend(Backend):
 
     def load(self, adata, fname, *args, **kwargs):
+        skip_if_not_found = kwargs.get('skip', False)
         verbose = kwargs.get('verbose', False)
 
         with open(os.path.join(self.dir, fname), 'rb') as fin:
@@ -55,8 +56,10 @@ class PickleBackend(Backend):
 
             for (attr, key), val in zip(attrs_keys, vals):
                 if val is None:
-                    if verbose:
-                        print(f'Cache contains empty value for attribute `{attr}`, key `{key}`. This could have happened when caching these values failed.')
+                    msg = f'Cache contains empty value for attribute `{attr}`, key `{key}`. This could have happened when caching these values failed.'
+                    if not skip_if_not_found:
+                        raise RuntimeError(msg + ' Use `skip=True` to skip the aforementioned keys.')
+                    warnings.warn(msg + ' Skipping.')
                     continue
 
                 if key is None or isinstance(key, str):
@@ -105,8 +108,13 @@ class PickleBackend(Backend):
 
                 for k in keys:
                     obj = obj[k]
-            except (AttributeError, KeyError):
-                print(f'Unable to find keys `{", ".join(map(str, keys))}`. Skipping.')
+
+            except KeyError as e:
+                msg = f'Unable to find keys `{", ".join(map(str, keys))}`.'
+                if not skip_not_found:
+                    raise RuntimeError(msg + ' Use `skip=True` to skip the aforementioned keys.') from e
+                warnings.warn(msg + ' Skipping.')
+
                 return None
 
             return obj
@@ -134,6 +142,7 @@ class PickleBackend(Backend):
 
 
         verbose = kwargs.get('verbose', False)
+        skip_not_found = kwargs.get('skip', False)
         possible_vals = kwargs.get('possible_vals', {})
 
         data = [((attr, (key, ) if key is None or isinstance(key, str) else key),
