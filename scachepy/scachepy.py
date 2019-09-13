@@ -263,7 +263,11 @@ class Cache:
             verbose = kwargs.pop('verbose', True)
             call = kwargs.pop('call', True)  # if we do not wish to call the callback
             skip = kwargs.pop('skip', False)
+            # leave these in kwargs
             copy = kwargs.get('copy', False)
+            def_fname = kwargs.get('default_fname', None)
+
+            assert fname is not None or def_fname is not None, f'No filename or default specified.'
 
             callback = None
             if len(args) > 1:
@@ -310,7 +314,8 @@ class Cache:
             # get the right field when using regexes
             if not cache_fn(adata, fname, False, verbose, skip, *args, **kwargs):
                 if verbose:
-                    print('No cache found, ' + ('computing values.' if call else 'searching for values.'))
+                    f = fname if fname is not None else def_fname
+                    print(f'No cache found in `{self.backend.dir / f}`, ' + ('computing values.' if call else 'searching for values.'))
                 res = callback(*args, **kwargs) if call else adata if copy else None
                 ret = cache_fn(res if copy else adata, fname, True, False, skip, *args, **kwargs)
                 assert ret, 'Caching horribly failed.'
