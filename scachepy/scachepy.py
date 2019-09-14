@@ -37,6 +37,7 @@ class Cache:
         make_dir: bool, optional (default: `True`)
             make the `cache_dir` if it does not exist
         '''
+
         self._backend = self._backends.get(backend, None)
         if self._backend is None:
             raise ValueError(f'Unknown backend type: `{backend}`. Supported backends are: `{", ".join(self._backends.keys())}`.')
@@ -56,9 +57,10 @@ class Cache:
             # TODO: not ideal - the Wrapper requires the function to be specified
             # we also must wrap the last function as opposed to the function returned by self.cache
             'pcarr': Wrapper(self._wrap_as_adata(self.cache(dict(obsm='X_pca'),
-                                                                default_fname='pca_arr',
-                                                                default_fn=sc.pp.pca, wrap=False),
-                                                     ret_attr=dict(obsm='X_pca')),
+                                                            default_fname='pca_arr',
+                                                            default_fn=sc.pp.pca,
+                                                            wrap=False),
+                                                 ret_attr=dict(obsm='X_pca')),
                                  sc.pp.pca),
             'expression': self.cache(dict(X=None), default_fname='expression'),
             'moments': self.cache(dict(uns='pca',
@@ -232,9 +234,9 @@ class Cache:
     def cache(self, *args, wrap=True, **kwargs):
         """
         Create a caching function.
+
         Params
         --------
-
         args: dict(str, Union[str, Iterable[Union[str, re._pattern_type]]])
             attributes are supplied as dictionary keys and
             values as dictionary values (need not be an Iterable)
@@ -256,16 +258,14 @@ class Cache:
         object as the second argument
         """
 
-
         def wrapper(*args, **kwargs):
             fname = kwargs.pop('fname', None)
             force = kwargs.pop('force', False)
             verbose = kwargs.pop('verbose', True)
             call = kwargs.pop('call', True)  # if we do not wish to call the callback
             skip = kwargs.pop('skip', False)
-            # leave these in kwargs
+            # leave it in kwargs
             copy = kwargs.get('copy', False)
-            def_fname = kwargs.get('default_fname', None)
 
             assert fname is not None or def_fname is not None, f'No filename or default specified.'
 
@@ -331,6 +331,7 @@ class Cache:
 
             return adata
 
+        def_fname = kwargs.get('default_fname', None)  # keep in in kwargs
         default_fn = kwargs.pop('default_fn', lambda *_x, **_y: None)
         cache_fn = self._create_cache_fn(*args, **kwargs)
 
