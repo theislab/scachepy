@@ -293,7 +293,7 @@ class Cache:
 
             if callback is None:
                 callback = default_fn
-            assert callable(callback), f'`{callblack}` is not callable.'
+            assert callable(callback), f'`{callback}` is not callable.'
 
             if force:
                 if verbose:
