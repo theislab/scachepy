@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from .backends import PickleBackend
-from .utils import Module, Wrapper
+from .utils import Module, FunctionWrapper
 
 from collections import Iterable, namedtuple
 
@@ -54,13 +54,13 @@ class Cache:
 
     def _init_pp(self):
         functions = {
-            # TODO: not ideal - the Wrapper requires the function to be specified
+            # TODO: not ideal - the FunctionWrapper requires the function to be specified
             # we also must wrap the last function as opposed to the function returned by self.cache
-            'pcarr': Wrapper(self._wrap_as_adata(self.cache(dict(obsm='X_pca'),
-                                                            default_fname='pca_arr',
-                                                            default_fn=sc.pp.pca,
-                                                            wrap=False),
-                                                 ret_attr=dict(obsm='X_pca')),
+            'pcarr': FunctionWrapper(self._wrap_as_adata(self.cache(dict(obsm='X_pca'),
+                                                                    default_fname='pca_arr',
+                                                                    default_fn=sc.pp.pca,
+                                                                    wrap=False),
+                                                         ret_attr=dict(obsm='X_pca')),
                                  sc.pp.pca),
             'expression': self.cache(dict(X=None), default_fname='expression'),
             'moments': self.cache(dict(uns='pca',
@@ -163,7 +163,7 @@ class Cache:
     
             return tuple(out)
 
-        return Wrapper(wrapper, fn)
+        return FunctionWrapper(wrapper, fn)
 
     @property
     def backend(self):
@@ -338,4 +338,4 @@ class Cache:
         default_fn = kwargs.pop('default_fn', lambda *_x, **_y: None)
         cache_fn = self._create_cache_fn(*args, **kwargs)
 
-        return Wrapper(wrapper, default_fn) if wrap else wrapper 
+        return FunctionWrapper(wrapper, default_fn) if wrap else wrapper 
