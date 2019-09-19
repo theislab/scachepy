@@ -3,12 +3,16 @@ import types
 
 
 # to simulate scanpy's .pp, .tl, .pl
-class Dummy:
+class Module:
 
     def __init__(self, typp, **kwargs):
+        self._fun_names = tuple(kwargs.keys())
         self._typp = typp
         for k, fn in kwargs.items():
             setattr(self, k, fn)
+
+    def __iter__(self):
+        return iter(self._fun_names)
 
     def __repr__(self):
         return f'<{self.__module__}.{self._typp}>'

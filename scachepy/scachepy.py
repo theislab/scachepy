@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from .backends import PickleBackend
-from .utils import Dummy, Wrapper
+from .utils import Module, Wrapper
 
 from collections import Iterable, namedtuple
 
@@ -81,7 +81,7 @@ class Cache:
                                      default_fname='neighs',
                                      default_fn=sc.pp.neighbors)
         }
-        self.pp = Dummy('pp', **functions)
+        self.pp = Module('pp', **functions)
 
     def _init_tl(self):
         functions = {
@@ -118,11 +118,11 @@ class Cache:
                                      default_fn=sc.tl.draw_graph,
                                      default_fname='draw_graph')
         }
-        self.tl = Dummy('tl', **functions)
+        self.tl = Module('tl', **functions)
 
     def _init_pl(self):
         functions = dict()
-        self.pl = Dummy('pl', **functions)
+        self.pl = Module('pl', **functions)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(backend={self.backend}, ext='{self._ext}')"
@@ -289,11 +289,14 @@ class Cache:
 
             # at this point, it's impossible for adata to be of type anndata.Raw
             # but the message should tell it's possible for it to be an input
-            assert isinstance(adata, (anndata.AnnData, )), f'Expected `{adata}` to be of type `anndata.AnnData` or `anndata.Raw`.'
+            assert isinstance(adata, (anndata.AnnData, )), f'Expected `{adata}` to be of type `anndata.AnnData` or `anndata.Raw`, found `{type(adata)}`.'
 
-            if callback is None:
+            # forcing always forces the callback
+            if (call or force) and callback is None:
+                if default_fn is None:
+                    raise RuntimeError('No callback specified and default is None; specify it as a 1st argument. ')
                 callback = default_fn
-            assert callable(callback), f'`{callback}` is not callable.'
+                assert callable(callback), f'`{callback}` is not callable.'
 
             if force:
                 if verbose:
@@ -302,7 +305,7 @@ class Cache:
                     warnings.warn('Specifying `call=False` and `force=True` still forces the computation.')
                 res = callback(*args, **kwargs)
                 ret = cache_fn(res if copy else adata, fname, True, verbose, skip, *args, **kwargs)
-                assert ret, 'Caching horribly failed.'
+                assert ret, 'Caching failed, horribly.'
 
                 return anndata.Raw(res) if is_raw and res is not None else res
 
@@ -318,7 +321,7 @@ class Cache:
                     print(f'No cache found in `{str(f) + self._ext}`, ' + ('computing values.' if call else 'searching for values.'))
                 res = callback(*args, **kwargs) if call else adata if copy else None
                 ret = cache_fn(res if copy else adata, fname, True, False, skip, *args, **kwargs)
-                assert ret, 'Caching horribly failed.'
+                assert ret, 'Caching failed, horribly.'
 
                 return anndata.Raw(res) if is_raw and res is not None else res
 
