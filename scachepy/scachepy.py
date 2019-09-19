@@ -315,7 +315,7 @@ class Cache:
             if not cache_fn(adata, fname, False, verbose, skip, *args, **kwargs):
                 if verbose:
                     f = fname if fname is not None else def_fname
-                    print(f'No cache found in `{self.backend.dir / f}`, ' + ('computing values.' if call else 'searching for values.'))
+                    print(f'No cache found in `{str(f) + self._ext}`, ' + ('computing values.' if call else 'searching for values.'))
                 res = callback(*args, **kwargs) if call else adata if copy else None
                 ret = cache_fn(res if copy else adata, fname, True, False, skip, *args, **kwargs)
                 assert ret, 'Caching horribly failed.'
