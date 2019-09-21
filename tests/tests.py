@@ -12,24 +12,32 @@ import unittest
 import os
 import shutil
 
+# TODO: automatic test creation
 
 _cache_dir = 'cache_test'
 shutil.rmtree(_cache_dir, ignore_errors=True)
 
 _cache = scachepy.Cache(_cache_dir, backend='pickle')
-_adata = sc.datasets.paul15()
+_adata_pp = sc.datasets.paul15()
+_adata_pp.layers['spliced'] = _adata_pp.X
+_adata_pp.layers['unspliced'] = _adata_pp.X / 2
+
+_adata_tl = _adata_pp.copy()
+sc.pp.pca(_adata_tl)
+sc.pp.neighbors(_adata_tl)
 
 
 def mtd(data):  # maybe to dense
     return data.todense() if issparse(data) else data
 
 
-class ScachepyTestCase(unittest.TestCase):
-        
-    adata = _adata.copy()
+class GeneralTest(unittest.TestCase):
+    pass
 
 
-class PpTests(ScachepyTestCase):
+class PpTests(unittest.TestCase):
+
+    adata = _adata_pp.copy()
 
     def test_pca(self):
 
@@ -60,12 +68,12 @@ class PpTests(ScachepyTestCase):
         fname = os.path.join(_cache.backend.dir, 'pca_arr' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
-        arr1 = mtd(_cache.pp.pcarr(_adata.X))
+        arr1 = mtd(_cache.pp.pcarr(self.adata.X))
 
         self.assertTrue(os.path.isfile(fname))
         self.assertIsInstance(arr1, np.ndarray)
 
-        arr2 = mtd(_cache.pp.pcarr(_adata.X))
+        arr2 = mtd(_cache.pp.pcarr(self.adata.X))
 
         self.assertTrue(np.array_equal(arr1, arr2))
 
@@ -109,12 +117,6 @@ class PpTests(ScachepyTestCase):
                                        mtd(neighbors['distances'])))
 
     def test_moments(self):
-        if 'spliced' not in self.adata.layers or \
-           'unspliced' not in self.adata.layers:
-               # dummy data
-               self.adata.layers['spliced'] = self.adata.X
-               self.adata.layers['unspliced'] = self.adata.X / 2
-
         if not 'X_pca' in self.adata.obsm:
             sc.pp.pca(self.adata)
 
@@ -145,33 +147,171 @@ class PpTests(ScachepyTestCase):
                                        mtd(self.adata.layers['Mu'])))
 
 
-class TlTests(ScachepyTestCase):
+class TlTests(unittest.TestCase):
+
+    adata = _adata_tl.copy()
 
     def test_louvain(self):
-        pass
+        fname = os.path.join(_cache.backend.dir, 'louvain' + _cache._ext)
+        self.assertFalse(os.path.isfile(fname))
 
-    def test_umap(self):
-        pass
+        _cache.tl.louvain(self.adata)
 
-    def test_diffmap(self):
-        pass
+        self.assertTrue(os.path.isfile(fname))
+        self.assertIn('louvain', self.adata.obs)
+
+        louvain = self.adata.obs['louvain'].copy()
+        del self.adata.obs['louvain']
+
+        _cache.tl.louvain(self.adata)
+
+        self.assertIn('louvain', self.adata.obs)
+        self.assertTrue(np.array_equal(self.adata.obs['louvain'], louvain))
+
+
+    def test_embeddings(self):
+
+        def test_embedding(basis):
+
+            def diffmap_check():
+                self.assertIn('iroot', self.adata.uns)
+                self.assertIn('diffmap_evals', self.adata.uns)
+
+            fname = os.path.join(_cache.backend.dir, basis + _cache._ext)
+            key = f'X_{basis}'
+            self.assertFalse(os.path.isfile(fname))
+
+            method = getattr(_cache.tl, basis)
+            method(self.adata)
+
+            self.assertTrue(os.path.isfile(fname))
+            self.assertIn(key, self.adata.obsm)
+            if basis == 'diffmap':
+                diffmap_check()
+
+            data = self.adata.obsm[key].copy()
+            del self.adata.obsm[key]
+            if basis == 'diffmap':
+                del self.adata.uns['iroot']
+                del self.adata.uns['diffmap_evals']
+
+            method(self.adata)
+
+            self.assertIn(key, self.adata.obsm)
+            self.assertTrue(np.array_equal(self.adata.obsm[key], data))
+            if basis == 'diffmap':
+                diffmap_check()
+
+        for basis in ['umap', 'diffmap', 'tsne']:
+            test_embedding(basis)
 
     def test_paga(self):
-        pass
+        fname = os.path.join(_cache.backend.dir, 'paga' + _cache._ext)
+        self.assertFalse(os.path.isfile(fname))
+
+        if 'louvain' not in self.adata.obsm:
+            sc.tl.louvain(self.adata)
+
+        _cache.tl.paga(self.adata)
+
+        self.assertTrue(os.path.isfile(fname))
+        self.assertIn('paga', self.adata.uns)
+
+        paga = self.adata.uns['paga'].copy()
+        del self.adata.uns['paga']
+
+        _cache.tl.paga(self.adata)
+
+        self.assertIn('paga', self.adata.uns)
+        self.assertTrue(np.array_equal(mtd(self.adata.uns['paga']['connectivities']),
+                                       mtd(paga['connectivities'])))
+        self.assertTrue(np.array_equal(mtd(self.adata.uns['paga']['connectivities_tree']),
+                                       mtd(paga['connectivities_tree'])))
+        self.assertTrue(np.array_equal(self.adata.uns['paga']['groups'], paga['groups']))
+
 
     def test_velocity(self):
-        pass
+        fname = os.path.join(_cache.backend.dir, 'velo' + _cache._ext)
+        self.assertFalse(os.path.isfile(fname))
+
+        _cache.tl.velocity(self.adata)
+
+        self.assertTrue(os.path.isfile(fname))
+        self.assertIn('velocity_gamma', self.adata.var)
+        self.assertIn('velocity_r2', self.adata.var)
+        self.assertIn('velocity_genes', self.adata.var)
+        self.assertIn('velocity', self.adata.layers)
 
     def test_velocity_graph(self):
-        pass
+        fname = os.path.join(_cache.backend.dir, 'velo_graph' + _cache._ext)
+        self.assertFalse(os.path.isfile(fname))
+
+        _cache.tl.velocity_graph(self.adata, vkey='velocity')
+
+        self.assertTrue(os.path.isfile(fname))
+        self.assertIn('velocity_graph', self.adata.uns)
+        self.assertIn('velocity_graph_neg', self.adata.uns)
+
+        G = self.adata.uns['velocity_graph'].copy()
+        G_neg = self.adata.uns['velocity_graph_neg'].copy()
+        del self.adata.uns['velocity_graph']
+        del self.adata.uns['velocity_graph_neg']
+
+        _cache.tl.velocity_graph(self.adata, vkey='velocity')
+
+        self.assertIn('velocity_graph', self.adata.uns)
+        self.assertIn('velocity_graph_neg', self.adata.uns)
+        self.assertTrue(np.array_equal(mtd(self.adata.uns['velocity_graph']), mtd(G)))
+        self.assertTrue(np.array_equal(mtd(self.adata.uns['velocity_graph_neg']), mtd(G_neg)))
 
     def test_velocity_embedding(self):
-        pass
+        if 'X_umap' not in self.adata.obsm:
+            sc.tl.umap(self.adata)
+        if 'velocity' not in self.adata.layers:
+            scv.tl.velocity(self.adata)
+        if 'velocity_graph' not in self.adata.uns:
+            scv.tl.velocity_graph(self.adata)
+
+        fname = os.path.join(_cache.backend.dir, 'velo_emb' + _cache._ext)
+        self.assertFalse(os.path.isfile(fname))
+
+        _cache.tl.velocity_embedding(self.adata, basis='umap')
+
+        self.assertTrue(os.path.isfile(fname))
+        self.assertIn('velocity_umap', self.adata.obsm)
+
+        emb = self.adata.obsm['velocity_umap'].copy()
+        del self.adata.obsm['velocity_umap']
+        
+        _cache.tl.velocity_embedding(self.adata, basis='umap')
+
+        self.assertIn('velocity_umap', self.adata.obsm)
+        self.assertTrue(np.array_equal(mtd(self.adata.obsm['velocity_umap']), mtd(emb)))
 
     def test_draw_graph(self):
-        pass
+        fname = os.path.join(_cache.backend.dir, 'draw_graph' + _cache._ext)
+        self.assertFalse(os.path.isfile(fname))
 
-class PlTests(ScachepyTestCase):
+        _cache.tl.draw_graph(self.adata, layout='fa')
+
+        self.assertTrue(os.path.isfile(fname))
+        self.assertIn('X_draw_graph_fa', self.adata.obsm)
+        self.assertIn('draw_graph', self.adata.uns)
+
+        emb = self.adata.obsm['X_draw_graph_fa'].copy()
+        dg = self.adata.uns['draw_graph'].copy()
+        del self.adata.obsm['X_draw_graph_fa']
+        del self.adata.uns['draw_graph']
+
+        _cache.tl.draw_graph(self.adata)
+
+        self.assertIn('X_draw_graph_fa', self.adata.obsm)
+        self.assertIn('draw_graph', self.adata.uns)
+        self.assertTrue(np.array_equal(mtd(self.adata.obsm['X_draw_graph_fa']), mtd(emb)))
+        self.assertTrue(np.array_equal(mtd(self.adata.uns['draw_graph']), mtd(dg)))
+
+
+class PlTests(unittest.TestCase):
     pass
 
 
