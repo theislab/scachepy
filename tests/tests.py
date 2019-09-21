@@ -146,8 +146,30 @@ class PpTests(ScachepyTestCase):
 
 
 class TlTests(ScachepyTestCase):
-    pass
 
+    def test_louvain(self):
+        pass
+
+    def test_umap(self):
+        pass
+
+    def test_diffmap(self):
+        pass
+
+    def test_paga(self):
+        pass
+
+    def test_velocity(self):
+        pass
+
+    def test_velocity_graph(self):
+        pass
+
+    def test_velocity_embedding(self):
+        pass
+
+    def test_draw_graph(self):
+        pass
 
 class PlTests(ScachepyTestCase):
     pass
