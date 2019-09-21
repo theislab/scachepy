@@ -145,9 +145,19 @@ class PickleBackend(Backend):
         skip_not_found = kwargs.get('skip', False)
         possible_vals = kwargs.get('possible_vals', {})
 
-        data = [((attr, (key, ) if key is None or isinstance(key, str) else key),
-                 _get_val(getattr(adata, attr), key))
-                for attr, key in map(lambda ak: (ak[0], _convert_key(*ak)), zip(attrs, keys))]
+        data = []
+        for attr, key in zip(attrs, keys):
+            key = _convert_key(attr, key)
+
+            value = _get_val(getattr(adata, attr), key)
+            if value is None:
+                continue
+
+            if key is None or isinstance(key, str):
+                key = (key, )
+
+            head = (attr, key)
+            data.append((head, value))
 
         with open(os.path.join(self.dir, fname), 'wb') as fout:
             pickle.dump(data, fout)
