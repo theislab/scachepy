@@ -1,17 +1,20 @@
-#!/usr/bin/env python3
-
 from .backends import PickleBackend
-from .utils import Module, FunctionWrapper
+from .utils import Module, FunctionWrapper, wrap_as_adata, SC_TMP_PLOT_KEY
 
+from functools import wraps
 from collections import Iterable, namedtuple
+from inspect import signature
+from matplotlib.backends.backend_tkagg import FigureCanvasAgg
+from PIL import Image
 
 import scvelo as scv
 import scanpy as sc
 import anndata
 
+import numpy as np
+import matplotlib as mpl
 import os
 import re
-import numpy as np
 import pickle
 import traceback
 import warnings
@@ -56,11 +59,11 @@ class Cache:
         functions = {
             # TODO: not ideal - the FunctionWrapper requires the function to be specified
             # we also must wrap the last function as opposed to the function returned by self.cache
-            'pcarr': FunctionWrapper(self._wrap_as_adata(self.cache(dict(obsm='X_pca'),
-                                                                    default_fname='pca_arr',
-                                                                    default_fn=sc.pp.pca,
-                                                                    wrap=False),
-                                                         ret_attr=dict(obsm='X_pca')),
+            'pcarr': FunctionWrapper(wrap_as_adata(self.cache(dict(obsm='X_pca'),
+                                                              default_fname='pca_arr',
+                                                              default_fn=sc.pp.pca,
+                                                              wrap=False),
+                                                   ret_attr=dict(obsm='X_pca')),
                                  sc.pp.pca),
             'expression': self.cache(dict(X=None), default_fname='expression'),
             'moments': self.cache(dict(uns='pca',
@@ -122,50 +125,43 @@ class Cache:
         }
         self.tl = Module('tl', **functions)
 
+    # TODO: maybe let scanpy write it to disk and read it from there?
     def _init_pl(self):
-        functions = dict()
+
+        def wrap(fn):
+
+            @wraps(fn)
+            def wrapper(adata, *args, **kwargs):
+                if SC_TMP_PLOT_KEY in adata.uns:
+                    return
+
+                return_fig = kwargs.pop('return_fig', None)
+                fig = fn(adata, *args, **kwargs, return_fig=True)
+
+                adata.uns[SC_TMP_PLOT_KEY] = fig2data(fig)
+
+            def fig2data(fig):
+                canvas = FigureCanvasAgg(fig)
+                canvas.draw()
+                s, (width, height) = canvas.print_to_buffer()
+
+                return np.fromstring(s, np.uint8).reshape((height, width, 4))
+
+            return wrapper
+
+        functions = {fn.__name__:self.cache(dict(uns=SC_TMP_PLOT_KEY),
+                                            default_fname=f'{fn.__name__}_plot',
+                                            default_fn=wrap(fn),
+                                            is_plot=True)
+                                            
+        for fn in filter(lambda fn: np.in1d(['return_fig'],  # only this works (wanted to  have with 'show')
+                                            list(signature(fn).parameters.keys())).all(),
+                         filter(callable, map(lambda name: getattr(sc.pl, name), dir(sc.pl))))}
+                               
         self.pl = Module('pl', **functions)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(backend={self.backend}, ext='{self._ext}')"
-
-    def _wrap_as_adata(self, fn, *, ret_attr):
-
-        def wrapper(*args, **kwargs):
-            if len(args) > 0:
-                adata = args[0] if isinstance(args[0], np.ndarray) else kwargs.get('adata')
-            else:
-                adata = kwargs.get('adata')
-
-            assert isinstance(adata, np.ndarray), f'Expected `{adata}` to be of type `np.ndarray`.'
-            # wrap the np.ndarray in AnnData
-            adata = anndata.AnnData(adata)
-
-            if isinstance(args[0], np.ndarray):
-                # can't assing to tuple
-                args = list(args)
-                args[0] = adata
-                args = tuple(args)
-            else:
-                kwargs['adata'] = adata
-
-            res = fn(*args, **kwargs)
-
-            # if copy was specified, operate on that object
-            # other use the original (inplace modification)
-            res = res if res is not None else adata
-
-            out = []
-            # currently, only 1 key is supported
-            for attr, k in ret_attr.items():
-                out.append(getattr(res, attr)[k])
-
-            if len(ret_attr) == 1:
-                return out[0]
-    
-            return tuple(out)
-
-        return FunctionWrapper(wrapper, fn)
 
     @property
     def backend(self):
@@ -173,7 +169,7 @@ class Cache:
 
     @backend.setter
     def backend(self, _):
-        raise RuntimeError('Setting is disallowed.') 
+        raise RuntimeError('Setting backend is disallowed.') 
 
     def _create_cache_fn(self, *args, default_fname=None):
 
@@ -234,7 +230,7 @@ class Cache:
 
 
     def cache(self, *args, wrap=True, **kwargs):
-        """
+        '''
         Create a caching function.
 
         Params
@@ -258,7 +254,7 @@ class Cache:
         a caching function accepting as the first argument either
         anndata.AnnData object or a callable and anndata.AnnData
         object as the second argument
-        """
+        '''
 
         def wrapper(*args, **kwargs):
             fname = kwargs.pop('fname', None)
@@ -267,7 +263,7 @@ class Cache:
             call = kwargs.pop('call', True)  # if we do not wish to call the callback
             skip = kwargs.pop('skip', False)
             # leave it in kwargs
-            copy = kwargs.get('copy', False)
+            copy = kwargs.get('copy', False) and not is_plot
 
             assert fname is not None or def_fname is not None, f'No filename or default specified.'
 
@@ -287,7 +283,7 @@ class Cache:
                     is_raw = True
                 adata = kwargs['adata']
             else:
-                raise ValueError(f'Unable to locat adata object in args or kwargs.')
+                raise ValueError(f'Unable to locate adata object in args or kwargs.')
 
             # at this point, it's impossible for adata to be of type anndata.Raw
             # but the message should tell it's possible for it to be an input
@@ -302,12 +298,16 @@ class Cache:
 
             if force:
                 if verbose:
-                    print('Forcing computing values.')
+                    print('Computing values (forced).')
                 if not call:
                     warnings.warn('Specifying `call=False` and `force=True` still forces the computation.')
                 res = callback(*args, **kwargs)
                 ret = cache_fn(res if copy else adata, fname, True, verbose, skip, *args, **kwargs)
                 assert ret, 'Caching failed, horribly.'
+
+                if is_plot:
+                    del adata.uns[SC_TMP_PLOT_KEY]
+                    return
 
                 return anndata.Raw(res) if is_raw and res is not None else res
 
@@ -325,7 +325,16 @@ class Cache:
                 ret = cache_fn(res if copy else adata, fname, True, False, skip, *args, **kwargs)
                 assert ret, 'Caching failed, horribly.'
 
+                if is_plot:
+                    del adata.uns[SC_TMP_PLOT_KEY]
+                    return
+
                 return anndata.Raw(res) if is_raw and res is not None else res
+
+            if is_plot:
+                data = adata.uns[SC_TMP_PLOT_KEY].copy()
+                del adata.uns[SC_TMP_PLOT_KEY]
+                return Image.fromarray(data)
 
             # if cache was found and not modifying inplace
             if not copy:
@@ -338,6 +347,7 @@ class Cache:
 
         def_fname = kwargs.get('default_fname', None)  # keep in in kwargs
         default_fn = kwargs.pop('default_fn', lambda *_x, **_y: None)
+        is_plot = kwargs.pop('is_plot', False)
         cache_fn = self._create_cache_fn(*args, **kwargs)
 
         return FunctionWrapper(wrapper, default_fn) if wrap else wrapper 
