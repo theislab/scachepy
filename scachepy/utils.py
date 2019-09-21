@@ -1,7 +1,10 @@
+import numpy as np
+import anndata
+
 import functools
 import types
 
-
+SC_TMP_PLOT_KEY = 'scachepy_tmp_plot'
 _caching_fn_doc = '''
     
     Caching function arguments.
@@ -21,6 +24,44 @@ _caching_fn_doc = '''
     verbose: Bool, optional (default: `True`)
         whether to print additional information
 '''
+
+def wrap_as_adata(fn, *, ret_attr):
+
+    def wrapper(*args, **kwargs):
+        if len(args) > 0:
+            adata = args[0] if isinstance(args[0], np.ndarray) else kwargs.get('adata')
+        else:
+            adata = kwargs.get('adata')
+
+        assert isinstance(adata, np.ndarray), f'Expected `{adata}` to be of type `np.ndarray`.'
+        # wrap the np.ndarray in AnnData
+        adata = anndata.AnnData(adata)
+
+        if isinstance(args[0], np.ndarray):
+            # can't assing to tuple
+            args = list(args)
+            args[0] = adata
+            args = tuple(args)
+        else:
+            kwargs['adata'] = adata
+
+        res = fn(*args, **kwargs)
+
+        # if copy was specified, operate on that object
+        # other use the original (inplace modification)
+        res = res if res is not None else adata
+
+        out = []
+        # currently, only 1 key is supported
+        for attr, k in ret_attr.items():
+            out.append(getattr(res, attr)[k])
+
+        if len(ret_attr) == 1:
+            return out[0]
+
+        return tuple(out)
+
+    return FunctionWrapper(wrapper, fn)
 
 
 # to simulate scanpy's .pp, .tl, .pl
