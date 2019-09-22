@@ -11,11 +11,22 @@ import warnings
 
 class Backend(ABC):
 
-    def __init__(self, dirname, make_dir):
+    def __init__(self, dirname, ext, make_dir):
         if make_dir and not os.path.exists(dirname):
             os.makedirs(dirname)
 
         self.dir = dirname
+        self._ext = ext
+    
+    def clear(self, verbose=1):
+        files = [f for f in os.listdir(self.dir) if f.endswith(self._ext)]
+        if verbose > 0:
+            print(f'Removing {len(files)} files.')
+
+        for f in files:
+            if verbose > 1:
+                print(f'Removing `{f}`.')
+            os.remove(os.path.join(self.dir, f))
 
     @property
     def dir(self):

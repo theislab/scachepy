@@ -46,12 +46,15 @@ class Cache:
         cache_dir = os.path.expanduser(cache_dir)
         cache_dir = os.path.abspath(cache_dir)
 
-        self._backend = self._backend(cache_dir, make_dir=make_dir)
         self._ext = ext if ext is not None else self._extensions.get(backend, '.scdata')
+        self._backend = self._backend(cache_dir, self._ext, make_dir=make_dir)
 
         self._init_pp()
         self._init_tl()
         self._init_pl()
+
+    def clear(self, verbose=1):
+        self.backend.clear(verbose)
 
     def _init_pp(self):
         functions = {
