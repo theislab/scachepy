@@ -6,12 +6,13 @@ import scanpy as sc
 import numpy as np
 import anndata
 import functools
+import warnings
 import types
 import os
 
 UNS_PLOT_KEY = 'scachepy_plot'
 _caching_fn_doc = '''
-    
+
     Caching function arguments.
 
     Arguments
@@ -29,6 +30,7 @@ _caching_fn_doc = '''
     verbose: Bool, optional (default: `True`)
         whether to print additional information
 '''
+
 
 def wrap_as_adata(fn, *, ret_attr):
 
@@ -67,11 +69,10 @@ def wrap_as_adata(fn, *, ret_attr):
 
         return tuple(out)
 
-    return wrapper #FunctionWrapper(wrapper, fn)
+    return wrapper
 
 
-# simulate scanpy's .pp, .tl, .pl
-class Module:
+class Module():  # simulate scanpy's .pp, .tl, .pl
 
     def __init__(self, typp, **kwargs):
         self._fun_names = tuple(kwargs.keys())
@@ -105,7 +106,7 @@ class FunctionWrapper():
         else:
             raise ValueError(f'Expected default_function to be either callable or NoneType, got: `type(def_fn)`.')
 
-        self._fn = wrapped
+        self._fn = wrapped 
         self._name = f'<caching function of "{name}">'
 
         super().__init__()
@@ -143,11 +144,15 @@ def plotting_wrapper(fn):
 
         elif 'save' in sig:
             if kwargs.pop('save', None) is not None:
-                warnings.warn('Ignoring option `save=True`.')
+                warnings.warn(f'Ignoring option `save=\'{save}\'`.')
 
             key = str(np.random.randint(1_000_000))
             fn(adata, *args, **kwargs, save=f'{key}.png')
+
+            assert os.path.isdir(sc.settings.figdir), f'No directory found under `sc.settings.figdir=\'{sc.settings.figdir}\'`.'
             possible_fnames = [f for f in os.listdir(sc.settings.figdir) if key in f]
+
+            print(possible_fnames)
 
             sc.settings.verbosity = verbosity
 

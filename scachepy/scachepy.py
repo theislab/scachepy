@@ -227,6 +227,8 @@ class Cache:
             caching function accepting as the first argument either
             `anndata.AnnData` object or a `callable` and `anndata.AnnData`
             object as the second argument
+            the `callable` either needs to return an `anndata.AnnData` object
+            (if `copy=True`) or just modify it inplace
         '''
 
         def wrapper(*args, **kwargs):
@@ -279,7 +281,11 @@ class Cache:
                 assert ret, 'Caching failed, horribly.'
 
                 if is_plot:
-                    del adata.uns[UNS_PLOT_KEY]
+                    # callback will show the plot
+                    if adata.uns.pop(UNS_PLOT_KEY, None) is None:
+                        # bad callback
+                        warnings.warn(f'Plotting callbacks require the `adata` object to have `.uns[\'{UNS_PLOT_KEY}\']`' \
+                                      ' containing the np.ndarray to plot (not found). You are likely seeing this because `skip=True`.')
                     return
 
                 return anndata.Raw(res) if is_raw and res is not None else res
@@ -299,19 +305,26 @@ class Cache:
                 assert ret, 'Caching failed, horribly.'
 
                 if is_plot:
-                    del adata.uns[UNS_PLOT_KEY]
+                    # callback will show the plot
+                    if adata.uns.pop(UNS_PLOT_KEY, None) is None:
+                        # bad callback
+                        warnings.warn(f'Plotting callbacks require the `adata` object to have `.uns[\'{UNS_PLOT_KEY}\']`' \
+                                      ' containing the np.ndarray to plot (not found). You are likely seeing this because `skip=True`.')
                     return
 
                 return anndata.Raw(res) if is_raw and res is not None else res
 
             if is_plot:
-                data = adata.uns[UNS_PLOT_KEY].copy()
-                del adata.uns[UNS_PLOT_KEY]
+                data = adata.uns.pop(UNS_PLOT_KEY, None)
+                if data is None:
+                    # bad data loading
+                    raise RuntimeError('Unable to load plot. No data found in `adata.uns[\'{UNS_PLOT_KEY}\']`.')
+
                 return Image.fromarray(data)
 
             # if cache was found and not modifying inplace
             if not copy:
-                return None
+                return
 
             if is_raw:
                 return anndata.Raw(adata)
