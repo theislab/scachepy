@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from collections import Iterable
 from pathlib import Path
 
-
 import numpy as np
 import os
 import re
@@ -95,7 +94,6 @@ class PickleBackend(Backend):
                     setattr(adata, attr, val)
 
         return True
-
 
     def save(self, adata, fname, attrs, keys, *args, **kwargs):
 

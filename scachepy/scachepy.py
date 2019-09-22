@@ -1,10 +1,8 @@
 from .backends import PickleBackend
-from .utils import Module, FunctionWrapper, wrap_as_adata, SC_TMP_PLOT_KEY
+from .utils import *
 
-from functools import wraps
 from collections import Iterable, namedtuple
 from inspect import signature
-from matplotlib.backends.backend_tkagg import FigureCanvasAgg
 from PIL import Image
 
 import scvelo as scv
@@ -30,15 +28,15 @@ class Cache:
         '''
         Params
         --------
-        cache_dir: str
+        cache_dir: Str
             path to directory where to save the files
-        backend: str, optional (default: `'pickle'`)
+        backend: Str, optional (default: `'pickle'`)
             which backend to use
-        ext: str, optional (default: `None`)
+        ext: Str, optional (default: `None`)
             file extensions, defaults to '.pickle' for
             'pickle' backend; defaults to '.scdata' if non applicable
-        make_dir: bool, optional (default: `True`)
-            make the `cache_dir` if it does not exist
+        make_dir: Bool, optional (default: `True`)
+            create `cache_dir` if it does not exist
         '''
 
         self._backend = self._backends.get(backend, None)
@@ -57,14 +55,10 @@ class Cache:
 
     def _init_pp(self):
         functions = {
-            # TODO: not ideal - the FunctionWrapper requires the function to be specified
-            # we also must wrap the last function as opposed to the function returned by self.cache
-            'pcarr': FunctionWrapper(wrap_as_adata(self.cache(dict(obsm='X_pca'),
-                                                              default_fname='pca_arr',
-                                                              default_fn=sc.pp.pca,
-                                                              wrap=False),
-                                                   ret_attr=dict(obsm='X_pca')),
-                                 sc.pp.pca),
+            'pcarr': wrap_as_adata(self.cache(dict(obsm='X_pca'),
+                                              default_fname='pca_arr',
+                                              default_fn=sc.pp.pca),
+                                   ret_attr=dict(obsm='X_pca')),
             'expression': self.cache(dict(X=None), default_fname='expression'),
             'moments': self.cache(dict(uns='pca',
                                        uns_cache1='neighbors',
@@ -125,38 +119,17 @@ class Cache:
         }
         self.tl = Module('tl', **functions)
 
-    # TODO: maybe let scanpy write it to disk and read it from there?
     def _init_pl(self):
-
-        def wrap(fn):
-
-            @wraps(fn)
-            def wrapper(adata, *args, **kwargs):
-                if SC_TMP_PLOT_KEY in adata.uns:
-                    return
-
-                return_fig = kwargs.pop('return_fig', None)
-                fig = fn(adata, *args, **kwargs, return_fig=True)
-
-                adata.uns[SC_TMP_PLOT_KEY] = fig2data(fig)
-
-            def fig2data(fig):
-                canvas = FigureCanvasAgg(fig)
-                canvas.draw()
-                s, (width, height) = canvas.print_to_buffer()
-
-                return np.fromstring(s, np.uint8).reshape((height, width, 4))
-
-            return wrapper
-
-        functions = {fn.__name__:self.cache(dict(uns=SC_TMP_PLOT_KEY),
-                                            default_fname=f'{fn.__name__}_plot',
-                                            default_fn=wrap(fn),
-                                            is_plot=True)
+        functions = {
+            fn.__name__:self.cache(dict(uns=UNS_PLOT_KEY),
+                                   default_fname=f'{fn.__name__}_plot',
+                                   default_fn=plotting_wrapper(fn),
+                                   is_plot=True)
                                             
-        for fn in filter(lambda fn: np.in1d(['return_fig'],  # only this works (wanted to  have with 'show')
-                                            list(signature(fn).parameters.keys())).all(),
-                         filter(callable, map(lambda name: getattr(sc.pl, name), dir(sc.pl))))}
+            for fn in filter(lambda fn: np.in1d(['return_fig', 'save'],  # only this works (wanted to  have with 'show')
+                                                list(signature(fn).parameters.keys())).any(),
+                             filter(callable, map(lambda name: getattr(sc.pl, name), dir(sc.pl))))
+        }
                                
         self.pl = Module('pl', **functions)
 
@@ -228,32 +201,32 @@ class Cache:
 
         return wrapper
 
-
     def cache(self, *args, wrap=True, **kwargs):
         '''
         Create a caching function.
 
         Params
         --------
-        args: dict(str, Union[str, Iterable[Union[str, re._pattern_type]]])
+        args: Dict[Str, Union[Str, Iterable[Union[Str, re._pattern_type]]]]
             attributes are supplied as dictionary keys and
-            values as dictionary values (need not be an Iterable)
+            values as dictionary values (need not be an `Iterable`)
             for caching multiple attributes of the same name,
             append to them postfixes of the following kind: `_cache1, _cache2, ...`
             there are also other ways of specifying this, please
             refer the source code of `_create_cache_fn`
-        wrap: bool, optional (default: `True`)
+        wrap: Bool, optional (default: `True`)
             whether to wrap in a pretty printing wrapper
-        default_fname: str
+        default_fname: Str
             default filename where to save the pickled data
-        default_fn: callable, optional (default: `None`)
+        default_fn: Callable, optional (default: `None`)
             function to call before caching the values
 
         Returns
         --------
-        a caching function accepting as the first argument either
-        anndata.AnnData object or a callable and anndata.AnnData
-        object as the second argument
+        caching_function: Callable
+            caching function accepting as the first argument either
+            `anndata.AnnData` object or a `callable` and `anndata.AnnData`
+            object as the second argument
         '''
 
         def wrapper(*args, **kwargs):
@@ -306,7 +279,7 @@ class Cache:
                 assert ret, 'Caching failed, horribly.'
 
                 if is_plot:
-                    del adata.uns[SC_TMP_PLOT_KEY]
+                    del adata.uns[UNS_PLOT_KEY]
                     return
 
                 return anndata.Raw(res) if is_raw and res is not None else res
@@ -326,14 +299,14 @@ class Cache:
                 assert ret, 'Caching failed, horribly.'
 
                 if is_plot:
-                    del adata.uns[SC_TMP_PLOT_KEY]
+                    del adata.uns[UNS_PLOT_KEY]
                     return
 
                 return anndata.Raw(res) if is_raw and res is not None else res
 
             if is_plot:
-                data = adata.uns[SC_TMP_PLOT_KEY].copy()
-                del adata.uns[SC_TMP_PLOT_KEY]
+                data = adata.uns[UNS_PLOT_KEY].copy()
+                del adata.uns[UNS_PLOT_KEY]
                 return Image.fromarray(data)
 
             # if cache was found and not modifying inplace
@@ -347,7 +320,7 @@ class Cache:
 
         def_fname = kwargs.get('default_fname', None)  # keep in in kwargs
         default_fn = kwargs.pop('default_fn', lambda *_x, **_y: None)
-        is_plot = kwargs.pop('is_plot', False)
+        is_plot = kwargs.pop('is_plot', False)  # plotting fuctions are special
         cache_fn = self._create_cache_fn(*args, **kwargs)
 
         return FunctionWrapper(wrapper, default_fn) if wrap else wrapper 

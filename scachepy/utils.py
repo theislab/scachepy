@@ -1,10 +1,15 @@
+from matplotlib.backends.backend_tkagg import FigureCanvasAgg
+from PIL import Image
+from inspect import signature
+
+import scanpy as sc
 import numpy as np
 import anndata
-
 import functools
 import types
+import os
 
-SC_TMP_PLOT_KEY = 'scachepy_tmp_plot'
+UNS_PLOT_KEY = 'scachepy_plot'
 _caching_fn_doc = '''
     
     Caching function arguments.
@@ -27,6 +32,7 @@ _caching_fn_doc = '''
 
 def wrap_as_adata(fn, *, ret_attr):
 
+    @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         if len(args) > 0:
             adata = args[0] if isinstance(args[0], np.ndarray) else kwargs.get('adata')
@@ -61,10 +67,10 @@ def wrap_as_adata(fn, *, ret_attr):
 
         return tuple(out)
 
-    return FunctionWrapper(wrapper, fn)
+    return wrapper #FunctionWrapper(wrapper, fn)
 
 
-# to simulate scanpy's .pp, .tl, .pl
+# simulate scanpy's .pp, .tl, .pl
 class Module:
 
     def __init__(self, typp, **kwargs):
@@ -112,3 +118,56 @@ class FunctionWrapper():
 
     def __repr__(self):
         return self._name
+
+
+def plotting_wrapper(fn):
+
+    @functools.wraps(fn)
+    def wrapper(adata, *args, **kwargs):
+        if UNS_PLOT_KEY in adata.uns:
+            return
+
+        verbosity = sc.settings.verbosity
+        sc.settings.verbosity = 0  # don't want any warnings
+
+        return_fig = kwargs.pop('return_fig', None)
+        sig = signature(fn).parameters.keys()
+
+        if 'return_fig' in sig:
+            # these are not nicely aligned (as it is the case with 'save'),
+            # but better than to writing to disk
+            fig = fn(adata, *args, **kwargs, return_fig=True)
+            adata.uns[UNS_PLOT_KEY] = fig2data(fig)
+
+            sc.settings.verbosity = verbosity
+
+        elif 'save' in sig:
+            if kwargs.pop('save', None) is not None:
+                warnings.warn('Ignoring option `save=True`.')
+
+            key = str(np.random.randint(1_000_000))
+            fn(adata, *args, **kwargs, save=f'{key}.png')
+            possible_fnames = [f for f in os.listdir(sc.settings.figdir) if key in f]
+
+            sc.settings.verbosity = verbosity
+
+            if not len(possible_fnames):
+                raise RuntimeError(f'Unable to find the saved figure.')
+            elif len(possible_fnames) > 1:
+                raise RuntimeError('Found ambiguous matches for the figure.')
+
+            fpath = os.path.join(sc.settings.figdir, possible_fnames[0])
+            adata.uns[UNS_PLOT_KEY] = np.array(Image.open(fpath))
+            os.remove(fpath)
+
+        else:
+            raise RuntimeError(f'Plotting function `{fn.__name__}` has no argument `return_fig` or `save`.')
+
+    def fig2data(fig):
+        canvas = FigureCanvasAgg(fig)
+        canvas.draw()
+        data, (width, height) = canvas.print_to_buffer()
+
+        return np.fromstring(data, np.uint8).reshape((height, width, 4))
+
+    return wrapper
