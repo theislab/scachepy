@@ -39,8 +39,7 @@ class Cache:
         self._ext = ext if ext is not None else self._extensions.get(backend, '.scdata')
 
         if self._separate_dirs:
-            for where, Mod in zip(['pp', 'tl', 'pl'],
-                                 [PpModule, TlModule, PlModule]):
+            for where, Mod in zip(['pp', 'tl', 'pl'], [PpModule, TlModule, PlModule]):
                 setattr(self, where, Mod(backend, dirname=os.path.join(self._root_dir, where), ext=self._ext))
         else:
             warnings.warn('`separate_dirs` option is `False`. This option will be removed in future release and cache will always create separate subdirectories.')
@@ -56,15 +55,17 @@ class Cache:
 
     @root_dir.setter
     def root_dir(self, _):
-        raise RuntimeError('Setting backend is disallowed')
+        raise RuntimeError('Setting backend is disallowed.')
 
     def clear(self, verbose=1):
         if not self._separate_dirs:
+            # same backend for everyone
             self._backend._clear(verbose=verbose)
         else:
-            self.pp.clear(verbose)
-            self.tl.clear(verbose)
-            self.pl.clear(verbose)
+            # |Deleting| = 8
+            self.pp._clear(verbose, separator='-' * 8)
+            self.tl._clear(verbose, separator='-' * 8)
+            self.pl._clear(verbose)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(root={self._root_dir}, ext='{self._ext}')"

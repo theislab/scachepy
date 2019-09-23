@@ -48,7 +48,7 @@ class PpTests(unittest.TestCase):
             self.assertIn('variance_ratio', adata.uns['pca'])
             self.assertIn('variance', adata.uns['pca'])
 
-        fname = os.path.join(_cache.backend.dir, 'pca' + _cache._ext)
+        fname = os.path.join(_cache.pp.backend.dir, 'pca' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         _cache.pp.pca(self.adata)
@@ -65,7 +65,7 @@ class PpTests(unittest.TestCase):
         pca_asserts(self.adata)
 
     def test_pcarr(self):
-        fname = os.path.join(_cache.backend.dir, 'pca_arr' + _cache._ext)
+        fname = os.path.join(_cache.pp.backend.dir, 'pca_arr' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         arr1 = mtd(_cache.pp.pcarr(self.adata.X))
@@ -78,7 +78,7 @@ class PpTests(unittest.TestCase):
         self.assertTrue(np.array_equal(arr1, arr2))
 
     def test_expression(self):
-        fname = os.path.join(_cache.backend.dir, 'expression' + _cache._ext)
+        fname = os.path.join(_cache.pp.backend.dir, 'expression' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         _cache.pp.expression(self.adata)
@@ -97,7 +97,7 @@ class PpTests(unittest.TestCase):
         if not 'X_pca' in self.adata.obsm:  # test has not yet been executed
             sc.pp.pca(self.adata)  # don't use cache version's here, since they have side effects
 
-        fname = os.path.join(_cache.backend.dir, 'neighs' + _cache._ext)
+        fname = os.path.join(_cache.pp.backend.dir, 'neighs' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         _cache.pp.neighbors(self.adata)
@@ -123,7 +123,7 @@ class PpTests(unittest.TestCase):
         if not 'neighbors' in self.adata.uns:
             sc.pp.neighbors(self.adata)
 
-        fname = os.path.join(_cache.backend.dir, 'moments' + _cache._ext)
+        fname = os.path.join(_cache.pp.backend.dir, 'moments' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         _cache.pp.moments(self.adata)
@@ -152,7 +152,7 @@ class TlTests(unittest.TestCase):
     adata = _adata_tl.copy()
 
     def test_louvain(self):
-        fname = os.path.join(_cache.backend.dir, 'louvain' + _cache._ext)
+        fname = os.path.join(_cache.tl.backend.dir, 'louvain' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         _cache.tl.louvain(self.adata)
@@ -177,7 +177,7 @@ class TlTests(unittest.TestCase):
                 self.assertIn('iroot', self.adata.uns)
                 self.assertIn('diffmap_evals', self.adata.uns)
 
-            fname = os.path.join(_cache.backend.dir, basis + _cache._ext)
+            fname = os.path.join(_cache.tl.backend.dir, basis + _cache._ext)
             key = f'X_{basis}'
             self.assertFalse(os.path.isfile(fname))
 
@@ -206,7 +206,7 @@ class TlTests(unittest.TestCase):
             test_embedding(basis)
 
     def test_paga(self):
-        fname = os.path.join(_cache.backend.dir, 'paga' + _cache._ext)
+        fname = os.path.join(_cache.tl.backend.dir, 'paga' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         if 'louvain' not in self.adata.obsm:
@@ -231,7 +231,7 @@ class TlTests(unittest.TestCase):
 
 
     def test_velocity(self):
-        fname = os.path.join(_cache.backend.dir, 'velo' + _cache._ext)
+        fname = os.path.join(_cache.tl.backend.dir, 'velo' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         _cache.tl.velocity(self.adata)
@@ -243,7 +243,7 @@ class TlTests(unittest.TestCase):
         self.assertIn('velocity', self.adata.layers)
 
     def test_velocity_graph(self):
-        fname = os.path.join(_cache.backend.dir, 'velo_graph' + _cache._ext)
+        fname = os.path.join(_cache.tl.backend.dir, 'velo_graph' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         _cache.tl.velocity_graph(self.adata, vkey='velocity')
@@ -272,7 +272,7 @@ class TlTests(unittest.TestCase):
         if 'velocity_graph' not in self.adata.uns:
             scv.tl.velocity_graph(self.adata)
 
-        fname = os.path.join(_cache.backend.dir, 'velo_emb' + _cache._ext)
+        fname = os.path.join(_cache.tl.backend.dir, 'velo_emb' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         _cache.tl.velocity_embedding(self.adata, basis='umap')
@@ -289,7 +289,7 @@ class TlTests(unittest.TestCase):
         self.assertTrue(np.array_equal(mtd(self.adata.obsm['velocity_umap']), mtd(emb)))
 
     def test_draw_graph(self):
-        fname = os.path.join(_cache.backend.dir, 'draw_graph' + _cache._ext)
+        fname = os.path.join(_cache.tl.backend.dir, 'draw_graph' + _cache._ext)
         self.assertFalse(os.path.isfile(fname))
 
         _cache.tl.draw_graph(self.adata, layout='fa')

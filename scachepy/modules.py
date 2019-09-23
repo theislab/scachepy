@@ -45,8 +45,11 @@ class Module(ABC):
     def backend(self, _):
         raise RuntimeError('Setting backend is disallowed')
 
+    def _clear(self, verbose=1, *, separator=None):
+        self.backend._clear(verbose, self._type, separator=separator)
+
     def clear(self, verbose=1):
-        self.backend._clear(verbose, self._type, separator=None if self._type == 'pl' else '-' * 8)
+        self._clear(verbose)
 
     def __iter__(self):  # to list available functions
         return iter(self._functions.keys())
