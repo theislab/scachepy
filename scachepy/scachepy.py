@@ -1,9 +1,9 @@
 from .modules import PpModule, TlModule, PlModule
 from .backends import PickleBackend
 from .utils import *
+from pathlib import Path
 
 import os
-import warnings
 
 
 class Cache:
@@ -35,16 +35,17 @@ class Cache:
             raise ValueError(f'Unknown backend type: `{backend_type}`. Supported backends are: `{", ".join(self._backends.keys())}`.')
 
         self._root_dir = os.path.expanduser(root_dir)
-        self._root_dir = os.path.abspath(self._root_dir)
+        self._root_dir = Path(self._root_dir)#os.path.abspath(self._root_dir))
         self._ext = ext if ext is not None else self._extensions.get(backend, '.scdata')
+        if not self._ext.startswith('.'):
+            self._ext = '.' + self._ext
 
         if self._separate_dirs:
             for where, Mod in zip(['pp', 'tl', 'pl'], [PpModule, TlModule, PlModule]):
-                setattr(self, where, Mod(backend, dirname=os.path.join(self._root_dir, where), ext=self._ext))
+                setattr(self, where, Mod(backend, dirname=os.path.join(self._root_dir, where), ext=self._ext, cache=self))
         else:
-            warnings.warn('`separate_dirs` option is `False`. This option will be removed in future release and cache will always create separate subdirectories.')
             # shared backend
-            self._backend = backend_type(root_dir, self._ext)
+            self._backend = backend_type(root_dir, self._ext, cache=self)
             self.pp = PpModule(self._backend)
             self.tl = TlModule(self._backend)
             self.pl = PlModule(self._backend)
@@ -54,8 +55,8 @@ class Cache:
         return self._root_dir
 
     @root_dir.setter
-    def root_dir(self, _):
-        raise RuntimeError('Setting backend is disallowed.')
+    def root_dir(self, dir):
+        raise RuntimeError('Setting root directory is disallowed.')
 
     def clear(self, verbose=1):
         if not self._separate_dirs:

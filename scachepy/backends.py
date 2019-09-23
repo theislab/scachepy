@@ -11,11 +11,12 @@ import warnings
 
 class Backend(ABC):
 
-    def __init__(self, dirname, ext):
+    def __init__(self, dirname, ext, *, cache):
         if not os.path.exists(dirname):
             os.makedirs(dirname)
 
         self._dirname = Path(dirname)
+        self._cache = cache
         self.ext = ext
 
     def _clear(self, verbose=1, typp='all', separator=None):
@@ -46,7 +47,11 @@ class Backend(ABC):
         elif not value.is_dir():
             warnings.warn(f'`{value}` is not a directory.')
 
-        self._dirname = value
+        if self._cache._separate_dirs:
+            self._dirname = self._cache.root_dir / value
+        else:
+            self._dirname = value
+            self._cache._root_dir = value
 
     @abstractmethod
     def load(self, adata, fname, *args, **kwargs):

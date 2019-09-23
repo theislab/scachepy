@@ -4,20 +4,21 @@ from scipy.sparse import issparse
 
 import scanpy as sc
 import scvelo as scv
+import anndata
 import scachepy
 
 import numpy as np
 
 import unittest
-import os
 import shutil
+import os
 
 # TODO: automatic test creation
 
 _cache_dir = 'cache_test'
 shutil.rmtree(_cache_dir, ignore_errors=True)
 
-_cache = scachepy.Cache(_cache_dir, backend='pickle')
+_cache = scachepy.Cache(_cache_dir, backend='pickle', separate_dirs=False)
 _adata_pp = sc.datasets.paul15()
 _adata_pp.layers['spliced'] = _adata_pp.X
 _adata_pp.layers['unspliced'] = _adata_pp.X / 2
@@ -30,9 +31,208 @@ sc.pp.neighbors(_adata_tl)
 def mtd(data):  # maybe to dense
     return data.todense() if issparse(data) else data
 
+# this could be done more nicely
+class GeneralTests(unittest.TestCase):
 
-class GeneralTest(unittest.TestCase):
-    pass
+    adata_pp = _adata_pp.copy()
+    adata_tl = _adata_tl.copy()
+
+    def test_invalid_backend(self):
+        with self.assertRaises(ValueError):
+            _ = scachepy.Cache('foo', backend='bar')
+
+    def test_extension(self):
+        c = scachepy.Cache('foo', separate_dirs=False, ext='bar')
+        c.pp.pca(self.adata_pp, fname='pca')
+        self.assertTrue(os.path.exists('foo/pca.bar'))
+        shutil.rmtree('foo')
+
+    def test_extension_override(self):
+        c = scachepy.Cache('foo', separate_dirs=False, ext='.bar')
+        c.pp.pca(self.adata_pp, fname='pca.foo')
+        self.assertTrue(os.path.exists('foo/pca.foo.bar'))
+        shutil.rmtree('foo')
+
+    def test_fname(self):
+        c = scachepy.Cache('foo', separate_dirs=False)
+        c.pp.pca(self.adata_pp, fname='bar.pickle')
+        self.assertTrue(os.path.exists('foo/bar.pickle'))
+        shutil.rmtree('foo')
+
+    def test_fname_sep(self):
+        c = scachepy.Cache('foo', separate_dirs=True)
+        c.pp.pca(self.adata_pp, fname='bar.pickle')
+        self.assertTrue(os.path.exists('foo/pp/bar.pickle'))
+        shutil.rmtree('foo')
+
+    def test_copy_save(self):
+        c = scachepy.Cache('foo', separate_dirs=False)
+        adata = c.pp.neighbors(self.adata_pp, copy=True)
+        self.assertTrue(isinstance(adata, anndata.AnnData))
+        self.assertTrue('neighbors' in adata.uns)
+        self.assertFalse('neighbors' in self.adata_pp.uns)
+        self.assertTrue(os.path.exists('foo/neighs.pickle'))
+        shutil.rmtree('foo')
+
+    def test_copy_load(self):
+        c = scachepy.Cache('foo', separate_dirs=False)
+        c.pp.neighbors(self.adata_pp)
+        del self.adata_pp.uns['neighbors']
+        adata = c.pp.neighbors(self.adata_pp, copy=True)
+        self.assertTrue(isinstance(adata, anndata.AnnData))
+        self.assertTrue('neighbors' in adata.uns)
+        self.assertFalse('neighbors' in self.adata_pp.uns)
+        shutil.rmtree('foo')
+
+    def test_callback(self):
+        
+        def callback(adata, *args, **kwargs):
+            raise RuntimeError('this should have happened')
+
+        c = scachepy.Cache('foo', separate_dirs=False)
+        with self.assertRaisesRegex(RuntimeError, 'this should have happened'):
+            c.pp.pca(callback, self.adata_pp)
+        shutil.rmtree('foo')
+
+    def test_force(self):
+
+        def callback(adata, *args, **kwargs):
+            nonlocal sentinel
+            sc.pp.pca(adata)
+            sentinel = True
+
+        c = scachepy.Cache('foo', separate_dirs=False, ext='.bar')
+        sentinel = False
+        c.pp.pca(callback, self.adata_pp, force=True)
+        self.assertTrue(sentinel)
+        shutil.rmtree('foo')
+
+    def test_not_call_key(self):
+
+        def callback(adata, *args, **kwargs):
+            nonlocal sentinel
+            sc.pp.pca(adata)
+            sentinel = True
+
+        c = scachepy.Cache('foo', separate_dirs=False, ext='.bar')
+        sentinel = False
+        # adata_tl already has pca
+        c.pp.pca(callback, self.adata_tl, call=False)
+        self.assertFalse(sentinel)
+        shutil.rmtree('foo')
+
+    def test_force_not_call(self):
+
+        def callback(adata, *args, **kwargs):
+            nonlocal sentinel
+            sc.pp.pca(adata)
+            sentinel = True
+
+        c = scachepy.Cache('foo', separate_dirs=False, ext='.bar')
+        sentinel = False
+        # adata_tl already has pca
+        c.pp.pca(callback, self.adata_tl, call=False, force=True)
+        self.assertTrue(sentinel)
+        shutil.rmtree('foo')
+
+    def test_not_call_no_key(self):
+
+        def callback(adata, *args, **kwargs):
+            nonlocal sentinel
+            scv.pp.moments(adata)
+            sentinel = True
+
+        c = scachepy.Cache('foo', separate_dirs=False, ext='.bar')
+        sentinel = False
+        # adata_pp already has no moments
+        with self.assertRaises(AssertionError):
+            c.pp.moments(callback, self.adata_pp, call=False)
+        shutil.rmtree('foo')
+
+    def test_backend_dir_set(self):
+        c = scachepy.Cache('foo', separate_dirs=False)
+        self.assertTrue(str(c.root_dir) == 'foo')
+        shutil.rmtree('foo')
+
+    def test_root_dir_set(self):
+        c = scachepy.Cache('foo', separate_dirs=True)
+        with self.assertRaises(RuntimeError):
+            c.root_dir = 'bar'
+
+    def test_backend_sep_set_dir(self):
+        c = scachepy.Cache('foo', separate_dirs=False)
+        c.pp.backend.dir = 'bar'
+        self.assertTrue(str(c.pp.backend.dir) == 'bar')
+        self.assertTrue(str(c.tl.backend.dir) == 'bar')
+        self.assertTrue(str(c.pl.backend.dir) == 'bar')
+        shutil.rmtree('foo')
+
+    def test_backend_sep_set_dir(self):
+        c = scachepy.Cache('foo', separate_dirs=True)
+        c.pp.backend.dir = 'bar'
+        c.tl.backend.dir = 'baz'
+        c.pl.backend.dir = 'quux'
+        print(c.pp.backend.dir)
+        self.assertTrue(str(c.pp.backend.dir) == 'foo/bar')
+        self.assertTrue(str(c.tl.backend.dir) == 'foo/baz')
+        self.assertTrue(str(c.pl.backend.dir) == 'foo/quux')
+        shutil.rmtree('foo')
+
+    def test_pp_clear(self):
+        c = scachepy.Cache('foo', separate_dirs=True)
+        c.pp.pca(self.adata_pp)
+        self.assertTrue(len(os.listdir(c.root_dir / 'pp')) == 1)
+        c.pp.clear()
+        self.assertTrue(len(os.listdir(c.root_dir / 'pp')) == 0)
+        shutil.rmtree('foo')
+
+    def test_tl_clear(self):
+        c = scachepy.Cache('foo', separate_dirs=True)
+        c.tl.louvain(self.adata_tl)
+        self.assertTrue(len(os.listdir(c.root_dir / 'tl')) == 1)
+        c.tl.clear()
+        self.assertTrue(len(os.listdir(c.root_dir / 'tl')) == 0)
+        shutil.rmtree('foo')
+
+    def test_pl_clear(self):
+        c = scachepy.Cache('foo', separate_dirs=True)
+        c.pl.pca(self.adata_pp)
+        self.assertTrue(len(os.listdir(c.root_dir / 'pl')) == 1)
+        c.pl.clear()
+        self.assertTrue(len(os.listdir(c.root_dir / 'pl')) == 0)
+        shutil.rmtree('foo')
+
+    def test_clear_all_sep(self):
+        c = scachepy.Cache('foo', separate_dirs=True)
+        c.pp.pca(self.adata_tl)
+        c.tl.louvain(self.adata_tl)
+        c.pl.pca(self.adata_tl)
+        for dir in ['pp', 'tl', 'pl']:
+            self.assertTrue(len(os.listdir(c.root_dir / dir)) == 1)
+        c.clear()
+        for dir in ['pp', 'tl', 'pl']:
+            self.assertTrue(len(os.listdir(c.root_dir / dir)) == 0)
+        shutil.rmtree('foo')
+
+    def test_clear_all_no_sep(self):
+        c = scachepy.Cache('foo', separate_dirs=False)
+        c.pp.pca(self.adata_tl)
+        c.tl.louvain(self.adata_tl)
+        c.pl.pca(self.adata_tl)
+        print(os.listdir(c.root_dir))
+        self.assertTrue(len(os.listdir(c.root_dir)) == 3)
+        c.clear()
+        self.assertTrue(len(os.listdir(c.root_dir)) == 0)
+        shutil.rmtree('foo')
+
+    def test_clear_no_remove(self):
+        c = scachepy.Cache('foo', separate_dirs=True)
+        c.pp.pca(self.adata_pp)
+        self.assertTrue(len(os.listdir(c.root_dir / 'pp')) == 1)
+        c.tl.clear()
+        c.pl.clear()
+        self.assertTrue(len(os.listdir(c.root_dir / 'pp')) == 1)
+        shutil.rmtree('foo')
 
 
 class PpTests(unittest.TestCase):
@@ -311,6 +511,7 @@ class TlTests(unittest.TestCase):
         self.assertTrue(np.array_equal(mtd(self.adata.uns['draw_graph']), mtd(dg)))
 
 
+# TODO: this really needs to be automated
 class PlTests(unittest.TestCase):
     pass
 
