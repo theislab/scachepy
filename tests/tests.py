@@ -84,6 +84,19 @@ class GeneralTests(unittest.TestCase):
         self.assertFalse('neighbors' in self.adata_pp.uns)
         shutil.rmtree('foo')
 
+    def test_skip(self):
+
+        def callback(adata, *args, **kwargs):
+            sc.pp.pca(adata)
+            del adata.obsm['X_pca']
+
+        c = scachepy.Cache('foo', separate_dirs=False, ext='.bar')
+        c.pp.pca(callback, self.adata_pp, skip=True)
+        adata = c.pp.pca(self.adata_pp, copy=True)
+        self.assertFalse('X_pca' in self.adata_pp.obsm)
+        self.assertFalse('X_pca' in adata.obsm)
+        shutil.rmtree('foo')
+
     def test_callback(self):
         
         def callback(adata, *args, **kwargs):

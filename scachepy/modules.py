@@ -43,7 +43,7 @@ class Module(ABC):
 
     @backend.setter
     def backend(self, _):
-        raise RuntimeError('Setting backend is disallowed')
+        raise RuntimeError('Setting backend is disallowed. To change the directory, try `dir` attribute of `backend.`')
 
     def _clear(self, verbose=1, *, separator=None):
         self.backend._clear(verbose, self._type, separator=separator)
@@ -114,7 +114,7 @@ class Module(ABC):
 
         return wrapper
 
-    def cache(self, *args, wrap=True, **kwargs):
+    def cache(self, *args, **kwargs):
         '''
         Create a caching function.
 
@@ -127,10 +127,8 @@ class Module(ABC):
             append to them postfixes of the following kind: `_cache1, _cache2, ...`
             there are also other ways of specifying this, please
             refer the source code of `_create_cache_fn`
-        wrap: Bool, optional (default: `True`)
-            whether to wrap in a pretty printing wrapper
         default_fname: Str
-            default filename where to save the pickled data
+            default filename where to save the data
         default_fn: Callable, optional (default: `None`)
             function to call before caching the values
 
@@ -162,16 +160,18 @@ class Module(ABC):
             is_raw = False
             if len(args) > 0 and isinstance(args[0], (anndata.AnnData, anndata.Raw)):
                 if isinstance(args[0], anndata.Raw):
+                    # get rid of the raw type
                     args = (args[0]._adata, *args[1:])
                     is_raw = True
                 adata = args[0]
             elif 'adata' in kwargs:
                 if isinstance(kwargs['adata'], anndata.Raw):
+                    # get rid of the raw type
                     kwargs['adata'] = kwargs['adata']._adata
                     is_raw = True
                 adata = kwargs['adata']
             else:
-                raise ValueError(f'Unable to locate adata object in args or kwargs.')
+                raise ValueError(f'Unable to locate adata object in `*args` or `**kwargs`.')
 
             # at this point, it's impossible for adata to be of type anndata.Raw
             # but the message should tell it's possible for it to be an input
@@ -246,10 +246,10 @@ class Module(ABC):
 
         def_fname = kwargs.get('default_fname', None)  # keep in in kwargs
         default_fn = kwargs.pop('default_fn', lambda *_x, **_y: None)
-        is_plot = kwargs.pop('is_plot', False)  # plotting fuctions are special
+        is_plot = kwargs.pop('is_plot', False)  # plotting fuctions are treated as special
         cache_fn = self._create_cache_fn(*args, **kwargs)
 
-        return FunctionWrapper(wrapper, default_fn) if wrap else wrapper
+        return FunctionWrapper(wrapper, default_fn)
 
 
 class PpModule(Module):
