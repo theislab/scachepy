@@ -43,6 +43,7 @@ class Cache:
                                  [PpModule, TlModule, PlModule]):
                 setattr(self, where, Mod(backend, dirname=os.path.join(self._root_dir, where), ext=self._ext))
         else:
+            warnings.warn('`separate_dirs` option is `False`. This option will be removed in future release and cache will always create separate subdirectories.')
             # shared backend
             self._backend = backend_type(root_dir, self._ext)
             self.pp = PpModule(self._backend)
