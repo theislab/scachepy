@@ -69,7 +69,7 @@ class Module(ABC):
                 if recache:
                     possible_vals = set(args) | set(kwargs.values())
                     return self.backend.save(adata, fname, attrs, keys,
-                                             skip=skip,
+                                             skip=skip, is_optional=is_optional,
                                              possible_vals=possible_vals, verbose=verbose)
 
                 if (self.backend.dir / fname).is_file():
@@ -108,8 +108,11 @@ class Module(ABC):
         else:
             raise RuntimeError('Expected the args to be of length 1 or 2.')
 
+        pat = re.compile(r'.*_opt')
+        is_optional = tuple(pat.match(a) is not None for a in attrs)
+
         # strip the postfix
-        pat = re.compile(r'_cache\d+$')
+        pat = re.compile(r'(:?_opt)|(?:_cache\d+)')
         attrs = tuple(pat.sub('', a) for a in attrs)
 
         return wrapper
@@ -154,7 +157,7 @@ class Module(ABC):
             assert fname is not None or def_fname is not None, f'No filename or default specified.'
 
             callback = None
-            if len(args) > 1:
+            if len(args) > 1 and callable(args[0]):
                 callback, *args = args
 
             is_raw = False
@@ -262,10 +265,10 @@ class PpModule(Module):
                                               default_fn=sc.pp.pca),
                                    ret_attr=dict(obsm='X_pca')),
             'expression': self.cache(dict(X=None), default_fname='expression'),
-            'moments': self.cache(dict(uns='pca',
-                                       uns_cache1='neighbors',
-                                       obsm='X_pca',
-                                       varm='PCs',
+            'moments': self.cache(dict(uns_opt='pca',
+                                       uns_opt_cache1='neighbors',
+                                       obsm_opt='X_pca',
+                                       varm_opt='PCs',
                                        layers='Ms',
                                        layers_cache1='Mu'),
                                   default_fn=scv.pp.moments,

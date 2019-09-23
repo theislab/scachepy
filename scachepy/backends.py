@@ -42,16 +42,14 @@ class Backend(ABC):
         if not isinstance(value, Path):
             value = Path(value)
 
-        if not value.exists():
-            warnings.warn(f'Path `{value}` does not exist.')
-        elif not value.is_dir():
-            warnings.warn(f'`{value}` is not a directory.')
-
         if self._cache._separate_dirs:
             self._dirname = self._cache.root_dir / value
         else:
             self._dirname = value
             self._cache._root_dir = value
+
+        if not self._dirname.exists():
+            os.makedirs(self._dirname)
 
     @abstractmethod
     def load(self, adata, fname, *args, **kwargs):
@@ -101,10 +99,10 @@ class PickleBackend(Backend):
                         if k not in at.keys():
                             at[k] = dict()
                         at = at[k]
-                        msg.append(f'[{k}]')
+                        msg.append(f'[\'{k}\']')
 
                     if verbose and key[-1] in at.keys():
-                        print(f'Warning: `{"".join(msg)}` already contains key: `{key[-1]}`.')
+                        print(f'Warning: `{"".join(msg)}` already contains key: `\'{key[-1]}\'`.')
 
                     at[key[-1]] = val
                 else:
@@ -116,8 +114,11 @@ class PickleBackend(Backend):
         return True
 
     def save(self, adata, fname, attrs, keys, *args, **kwargs):
+        
+        # value not found from _get_val
+        sentinel = object()
 
-        def _get_val(obj, keys):
+        def _get_val(obj, keys, optional):
             try:
                 if keys is None:
                     return obj
@@ -129,12 +130,15 @@ class PickleBackend(Backend):
                     obj = obj[k]
 
             except KeyError as e:
+                if optional:
+                    return sentinel
+
                 msg = f'Unable to find keys `{", ".join(map(str, keys))}`.'
                 if not skip_not_found:
                     raise RuntimeError(msg + ' Use `skip=True` to skip the aforementioned keys.') from e
                 warnings.warn(msg + ' Skipping.')
 
-                return None
+                return sentinel
 
             return obj
 
@@ -163,13 +167,21 @@ class PickleBackend(Backend):
         verbose = kwargs.get('verbose', False)
         skip_not_found = kwargs.get('skip', False)
         possible_vals = kwargs.get('possible_vals', {})
+        is_optional = kwargs.get('is_optional', [False] * len(attrs))
 
         data = []
-        for attr, key in zip(attrs, keys):
+        for attr, key, opt in zip(attrs, keys, is_optional):
+            if not hasattr(adata, attr):
+                if opt:
+                    continue
+                raise AttributeError(f'`adata` object has no attribute `{attr}` and'
+                                      ' was not specified as optional.')
+
             key = _convert_key(attr, key)
 
-            value = _get_val(getattr(adata, attr), key)
-            if value is None:
+            value = _get_val(getattr(adata, attr), key, opt)
+            if value is sentinel:
+                # value not found - either skipping or optional
                 continue
 
             if key is None or isinstance(key, str):
