@@ -1,6 +1,7 @@
 from matplotlib.backends.backend_tkagg import FigureCanvasAgg
 from PIL import Image
 from inspect import signature
+from abc import ABC
 
 import scanpy as sc
 import numpy as np
@@ -9,6 +10,7 @@ import functools
 import warnings
 import types
 import os
+
 
 UNS_PLOT_KEY = 'scachepy_plot'
 _caching_fn_doc = '''
@@ -70,21 +72,6 @@ def wrap_as_adata(fn, *, ret_attr):
         return tuple(out)
 
     return wrapper
-
-
-class Module():  # simulate scanpy's .pp, .tl, .pl
-
-    def __init__(self, typp, **kwargs):
-        self._fun_names = tuple(kwargs.keys())
-        self._typp = typp
-        for k, fn in kwargs.items():
-            setattr(self, k, fn)
-
-    def __iter__(self):  # to list available functions
-        return iter(self._fun_names)
-
-    def __repr__(self):
-        return f'<{self.__module__}.{self._typp}>'
 
 
 class FunctionWrapper():

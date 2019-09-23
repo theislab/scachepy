@@ -11,23 +11,27 @@ import warnings
 
 class Backend(ABC):
 
-    def __init__(self, dirname, ext, make_dir):
-        if make_dir and not os.path.exists(dirname):
+    def __init__(self, dirname, ext):
+        if not os.path.exists(dirname):
             os.makedirs(dirname)
 
-        self.dir = dirname
-        self._ext = ext
-    
-    def clear(self, verbose=1):
-        files = [f for f in os.listdir(self.dir) if f.endswith(self._ext)]
+        self._dirname = Path(dirname)
+        self.ext = ext
+
+    def _clear(self, verbose=1, typp='all', separator=None):
+        files = [f for f in os.listdir(self.dir) if f.endswith(self.ext) and
+                 os.path.isfile(os.path.join(self.dir, f))]
         if verbose > 0:
-            print(f'Removing {len(files)} files.')
+            print(f'Deleting {len(files)} files from `{typp}`.')
 
         for f in files:
             if verbose > 1:
-                print(f'Removing `{f}`.')
+                print(f'Deleting `{f}`.')
             os.remove(os.path.join(self.dir, f))
 
+        if separator is not None:
+            print(separator)
+    
     @property
     def dir(self):
         return self._dirname
@@ -53,7 +57,7 @@ class Backend(ABC):
         raise NotImplementedError
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(dir='{self.dir}')"
+        return f"{self.__class__.__name__}(dir='{self.dir}', ext='{self.ext}')"
 
 
 class PickleBackend(Backend):
