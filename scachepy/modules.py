@@ -250,6 +250,7 @@ class Module(ABC):
         def_fname = kwargs.get('default_fname', None)  # keep in in kwargs
         default_fn = kwargs.pop('default_fn', lambda *_x, **_y: None)
         is_plot = kwargs.pop('is_plot', False)  # plotting fuctions are treated as special
+
         cache_fn = self._create_cache_fn(*args, **kwargs)
 
         return FunctionWrapper(wrapper, default_fn)
@@ -324,7 +325,22 @@ class TlModule(Module):
             'draw_graph': self.cache(dict(obsm=re.compile(r'^X_draw_graph_(.+)$'),
                                           uns='draw_graph'),
                                      default_fn=sc.tl.draw_graph,
-                                     default_fname='draw_graph')
+                                     default_fname='draw_graph'),
+            'recover_dynamics': self.cache(
+                dict(uns='recover_dynamics',
+                     layers='fit_t',
+                     layers_cache1='fit_tau',
+                     layers_cache2='fit_tau_',
+                     varm_opt='loss',
+                     # the keys are taken from the source file
+                     # and var is optional, since it's still under development
+                     **{f'var_cache{i}_opt':re.compile(rf'(.+)_{name}$')
+                        for i, name in enumerate(['alpha', 'beta', 'gamma', 't_', 'scaling',
+                                                  'std_u', 'std_s', 'likelihood', 'u0', 's0',
+                                                  'pval_steady', 'steady_u', 'steady_s'])}),
+                 default_fn=scv.tl.recover_dynamics,
+                 default_fname='recover_dynamics'
+            )
         }
         super().__init__(backend, **kwargs)
 
