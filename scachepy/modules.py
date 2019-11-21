@@ -343,7 +343,7 @@ class TlModule(Module):
                      varm_opt='loss',
                      # the keys are taken from the source file
                      # and var is optional, since it's still under development
-                     **{f'var_cache{i}_opt':re.compile(rf'(.+)_{name}$')
+                     **{f'var_opt_cache{i}':re.compile(rf'(.+)_{name}$')
                         for i, name in enumerate(['alpha', 'beta', 'gamma', 't_', 'scaling',
                                                   'std_u', 'std_s', 'likelihood', 'u0', 's0',
                                                   'pval_steady', 'steady_u', 'steady_s'])}),
