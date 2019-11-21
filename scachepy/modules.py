@@ -68,6 +68,7 @@ class Module(ABC):
 
                 if recache:
                     possible_vals = set(args) | set(kwargs.values())
+
                     return self.backend.save(adata, fname, attrs, keys,
                                              skip=skip, is_optional=is_optional,
                                              possible_vals=possible_vals, verbose=verbose)
@@ -134,6 +135,10 @@ class Module(ABC):
             default filename where to save the data
         default_fn: Callable, optional (default: `None`)
             function to call before caching the values
+        default_keyhint: Str
+            when ambiguous matches occurr, save all values which have
+            `default_keyhint` inside
+            overridable by `keyhint` when calling the function
 
         Returns
         --------
@@ -151,6 +156,8 @@ class Module(ABC):
             verbose = kwargs.pop('verbose', True)
             call = kwargs.pop('call', True)  # if we do not wish to call the callback
             skip = kwargs.pop('skip', False)
+            # resolver of ambigous matches
+            keyhint = kwargs.pop('keyhint', None) or def_keyhint
             # leave it in kwargs
             copy = kwargs.get('copy', False) and not is_plot
 
@@ -193,7 +200,7 @@ class Module(ABC):
                 if not call:
                     warnings.warn('Specifying `call=False` and `force=True` still forces the computation.')
                 res = callback(*args, **kwargs)
-                ret = cache_fn(res if copy else adata, fname, True, verbose, skip, *args, **kwargs)
+                ret = cache_fn(res if copy else adata, fname, True, verbose, skip, *args, keyhint=keyhint, **kwargs)
                 assert ret, 'Caching failed, horribly.'
 
                 if is_plot:
@@ -212,12 +219,13 @@ class Module(ABC):
 
             # we need to pass the *args and **kwargs in order to
             # get the right field when using regexes
-            if not cache_fn(adata, fname, False, verbose, skip, *args, **kwargs):
+            if not cache_fn(adata, fname, False, verbose, skip, *args, keyhint=keyhint, **kwargs):
                 if verbose:
                     f = fname if fname is not None else def_fname
                     print(f'No cache found in `{str(f) + self.backend.ext}`, ' + ('computing values.' if call else 'searching for values.'))
+
                 res = callback(*args, **kwargs) if call else adata if copy else None
-                ret = cache_fn(res if copy else adata, fname, True, False, skip, *args, **kwargs)
+                ret = cache_fn(res if copy else adata, fname, True, False, skip, *args, keyhint=keyhint, **kwargs)
                 assert ret, 'Caching failed, horribly.'
 
                 if is_plot:
@@ -225,7 +233,7 @@ class Module(ABC):
                     if adata.uns.pop(UNS_PLOT_KEY, None) is None:
                         # bad callback
                         warnings.warn(f'Plotting callbacks require the `adata` object to have `.uns[\'{UNS_PLOT_KEY}\']`' \
-                                      ' containing the np.ndarray to plot (not found). You are likely seeing this because `skip=True`.')
+                                      ' containing `np.ndarray` to plot (not found). You are likely seeing this because `skip=True`.')
                     return
 
                 return anndata.Raw(res) if is_raw and res is not None else res
@@ -248,8 +256,10 @@ class Module(ABC):
             return adata
 
         def_fname = kwargs.get('default_fname', None)  # keep in in kwargs
+        def_keyhint = kwargs.pop('default_keyhint', None)
         default_fn = kwargs.pop('default_fn', lambda *_x, **_y: None)
         is_plot = kwargs.pop('is_plot', False)  # plotting fuctions are treated as special
+
         cache_fn = self._create_cache_fn(*args, **kwargs)
 
         return FunctionWrapper(wrapper, default_fn)
@@ -324,13 +334,28 @@ class TlModule(Module):
             'draw_graph': self.cache(dict(obsm=re.compile(r'^X_draw_graph_(.+)$'),
                                           uns='draw_graph'),
                                      default_fn=sc.tl.draw_graph,
-                                     default_fname='draw_graph')
+                                     default_fname='draw_graph'),
+            'recover_dynamics': self.cache(
+                dict(uns='recover_dynamics',
+                     layers='fit_t',
+                     layers_cache1='fit_tau',
+                     layers_cache2='fit_tau_',
+                     varm_opt='loss',
+                     # the keys are taken from the source file
+                     # and var is optional, since it's still under development
+                     **{f'var_opt_cache{i}':re.compile(rf'(.+)_{name}$')
+                        for i, name in enumerate(['alpha', 'beta', 'gamma', 't_', 'scaling',
+                                                  'std_u', 'std_s', 'likelihood', 'u0', 's0',
+                                                  'pval_steady', 'steady_u', 'steady_s'])}),
+                 default_fn=scv.tl.recover_dynamics,
+                 default_fname='recover_dynamics',
+                 default_keyhint='fit'
+            )
         }
         super().__init__(backend, **kwargs)
 
 
 class PlModule(Module):
-
 
     def __init__(self, backend, **kwargs):
         self._type = 'pl'
