@@ -28,6 +28,9 @@ _caching_fn_doc = '''
         whether to call the callback prior to caching
     skip: Bool, optional (default: `False`)
         whether to skip mandatory keys which are not found
+    keyhint: Str, optional (default: `None`)
+        when ambiguous matches occurr in keynames,
+        include all values whose keys contain `keyhint`
     verbose: Bool, optional (default: `True`)
         whether to print additional information
 '''

@@ -113,7 +113,7 @@ class PickleBackend(Backend):
 
         return True
 
-    def save(self, adata, fname, attrs, keys, *args, **kwargs):
+    def save(self, adata, fname, attrs, keys, *args, keyhint=None, **kwargs):
         
         # value not found from _get_val
         sentinel = object()
@@ -152,10 +152,22 @@ class PickleBackend(Backend):
 
                 if len(res) == 0:
                     # default value was not specified during the call
-                    assert len(km) == 1, f'Found ambiguous matches for `{key}` in attribute `{attr}`: `{set(km.keys())}`.'
+                    if len(km) != 1:
+                        assert keyhint is not None, \
+                                f'Found ambiguous matches for `{key}` in attribute `{attr}`: `{set(km.values())}`. ' \
+                                'Try specifying `keyhint=\'...\'`.'
+
+                        return tuple(v for v in km.values() if keyhint in v)
+
                     return tuple(km.values())[0]
 
-                assert len(res) == 1, f'Found ambiguous matches for `{key}` in attribute `{attr}`: `{res}`.'
+                if len(res) != 1:
+                    assert keyhint is not None, \
+                                f'Found ambiguous matches for `{key}` in attribute `{attr}`: `{res}`. ' \
+                                'Try specifying `keyhint=\'...\'`.'
+
+                    return tuple(v for v in km.values() if keyhint in v)
+
                 return km[res.pop()]
 
             assert isinstance(key, Iterable)
