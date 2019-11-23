@@ -94,7 +94,7 @@ class Module(ABC):
 
     def _create_cache_fn(self, *args, default_fname=None):
 
-        def wrapper(adata, fname=None, recache=False, verbose=True, skip=False, *args, **kwargs):
+        def wrapper(adata, fname=None, recache=False, verbose=True, skip=False, keyhint=None, *args, **kwargs):
             try:
                 if fname is None:
                     fname = default_fname
@@ -106,6 +106,7 @@ class Module(ABC):
 
                     return self.backend.save(adata, fname, attrs, keys,
                                              skip=skip, is_optional=is_optional,
+                                             keyhint=keyhint,
                                              possible_vals=possible_vals, verbose=verbose)
 
                 if (self.backend.dir / fname).is_file():
@@ -227,7 +228,7 @@ class Module(ABC):
                 if default_fn is None:
                     raise RuntimeError('No callback specified and default is None; specify it as a 1st argument. ')
                 callback = default_fn
-                assert callable(callback), f'`{callback}` is not callable.'
+                assert callable(callback), f'Function `{callback}` is not callable.'
 
             if force:
                 if verbose:
@@ -235,7 +236,7 @@ class Module(ABC):
                 if not call:
                     warnings.warn('Specifying `call=False` and `force=True` still forces the computation.')
                 res = callback(*args, **kwargs)
-                ret = cache_fn(res if copy else adata, fname, True, verbose, skip, *args, keyhint=keyhint, **kwargs)
+                ret = cache_fn(res if copy else adata, fname, True, verbose, skip, keyhint, *args, **kwargs)
                 assert ret, 'Caching failed, horribly.'
 
                 if is_plot:
@@ -254,13 +255,13 @@ class Module(ABC):
 
             # we need to pass the *args and **kwargs in order to
             # get the right field when using regexes
-            if not cache_fn(adata, fname, False, verbose, skip, *args, keyhint=keyhint, **kwargs):
+            if not cache_fn(adata, fname, False, verbose, skip, keyhint, *args, **kwargs):
                 if verbose:
                     f = fname if fname is not None else def_fname
                     print(f'No cache found in `{str(f) + self.backend.ext}`, ' + ('computing values.' if call else 'searching for values.'))
 
                 res = callback(*args, **kwargs) if call else adata if copy else None
-                ret = cache_fn(res if copy else adata, fname, True, False, skip, *args, keyhint=keyhint, **kwargs)
+                ret = cache_fn(res if copy else adata, fname, True, False, skip, keyhint, *args, **kwargs)
                 assert ret, 'Caching failed, horribly.'
 
                 if is_plot:
@@ -353,6 +354,10 @@ class TlModule(Module):
             'paga': self.cache(dict(uns='paga'),
                                default_fn=sc.tl.paga,
                                default_fname='paga'),
+            'embedding_density': self.cache(dict(obs=re.compile(r'(.+_density_?.*)'),
+                                                 uns=re.compile(r'(.+_density_.*params$)')),
+                                            default_fn=sc.tl.embedding_density,
+                                            default_fname='embedding_density'),
             'velocity': self.cache(dict(var='velocity_gamma',
                                         var_cache1='velocity_r2',
                                         var_cache2='velocity_genes',
