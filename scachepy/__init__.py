@@ -1,1 +1,1 @@
-from .scachepy import Cache
+from .cache import Cache

@@ -28,9 +28,11 @@ _caching_fn_doc = '''
         whether to call the callback prior to caching
     skip: Bool, optional (default: `False`)
         whether to skip mandatory keys which are not found
-    keyhint: Str, optional (default: `None`)
-        when ambiguous matches occurr in keynames,
-        include all values whose keys contain `keyhint`
+    keyhint: Union[Str, re._pattern_type, List[Str]], optional (default: `None`)
+        when ambiguous matches occurr in keys
+        if a string, include all keys which contain `keyhint`
+        if a tuple or a list, include all keys which contain all values in `keyhint`
+        if a regex, include all keys that match the pattern
     verbose: Bool, optional (default: `True`)
         whether to print additional information
 '''

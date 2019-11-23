@@ -56,7 +56,7 @@ class Backend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def save(self, adata, fname, attrs, keys, *args, **kwargs):
+    def save(self, adata, fname, attrs, keys, *args, keyhint=None, **kwargs):
         raise NotImplementedError
 
     def __repr__(self):
@@ -144,7 +144,7 @@ class PickleBackend(Backend):
 
         def _convert_key(attr, key, optional):
             if key is None or isinstance(key, str):
-                return key
+                return key, False
 
             if isinstance(key, re._pattern_type):
                 km = {key.match(k).groups()[0]:k for k in getattr(adata, attr).keys() if key.match(k) is not None}
@@ -153,35 +153,53 @@ class PickleBackend(Backend):
                 if len(res) == 0:
                     # default value was not specified during the call
                     if len(km) == 0 and optional:
-                        return sentinel
+                        return sentinel, False
 
                     # found multiple matching keys
                     if len(km) != 1:
                         assert keyhint is not None, \
-                                f'Found ambiguous matches for `{key}` in attribute `{attr}`: `{set(km.values())}`. ' \
-                                'Try specifying `keyhint=\'...\'`.'
+                                f'Found ambiguous matches for `{key}` in `adata.{attr}`: `{set(km.values())}`. ' \
+                                'Try specifying `keyhint=\'...\'` to filter them out.'
 
                         # resolve by keyhint
-                        return tuple(v for v in km.values() if keyhint in v)
+                        filter_fn = (lambda v: keyhint.match(v) is not None) \
+                                if isinstance(keyhint, re._pattern_type) else (lambda v: all(k in v for k in keyhint)) \
+                                if isinstance(keyhint, (tuple, list)) else (lambda v: keyhint in v)
+                        return tuple(v for v in km.values() if filter_fn(v)), True
 
                     # only 1 value
-                    return tuple(km.values())[0]
+                    return tuple(km.values())[0], False
 
                 if len(res) != 1:
                     assert keyhint is not None, \
-                                f'Found ambiguous matches for `{key}` in attribute `{attr}`: `{res}`. ' \
-                                'Try specifying `keyhint=\'...\'`.'
+                                f'Found ambiguous matches for `{key}` in `adata.{attr}`: `{res}`. ' \
+                                'Try specifying `keyhint=\'...\'` to filter them out.'
 
                     # resolve by keyhint
-                    return tuple(v for v in km.values() if keyhint in v)
+                    filter_fn = (lambda v: keyhint.match(v) is not None) \
+                            if isinstance(keyhint, re._pattern_type) else (lambda v: all(k in v for k in keyhint)) \
+                            if isinstance(keyhint, (tuple, list)) else (lambda v: keyhint in v)
+
+                    return tuple(v for v in km.values() if filter_fn(v)), True
 
                 # only 1 value
-                return km[res.pop()]
+                return km[res.pop()], False
 
             assert isinstance(key, Iterable)
 
             # converting to tuple because it's hashable
-            return tuple(key)
+            return tuple(key), False
+
+        def _get_data(adata, attr, key, opt):
+            value = _get_val(getattr(adata, attr), key, opt)
+            # value not found - either skipping or optional
+            if value is sentinel:
+                return
+
+            if key is None or isinstance(key, str):
+                key = (key, )
+
+            return (attr, key), value
 
 
         verbose = kwargs.get('verbose', False)
@@ -197,21 +215,18 @@ class PickleBackend(Backend):
                 raise AttributeError(f'`adata` object has no attribute `{attr}` and'
                                       ' was not specified as optional.')
 
-            key = _convert_key(attr, key, opt)
-            if key is sentinel:
-                # optional key not found
+            key, check_for_mul_keys = _convert_key(attr, key, opt)
+            if key is sentinel:  # optional key not found
                 continue
-
-            value = _get_val(getattr(adata, attr), key, opt)
-            if value is sentinel:
-                # value not found - either skipping or optional
-                continue
-
-            if key is None or isinstance(key, str):
-                key = (key, )
-
-            head = (attr, key)
-            data.append((head, value))
+            elif check_for_mul_keys:  # keyhint returned multiple
+                for k in key:
+                    d = _get_data(adata, attr, k, opt)
+                    if d is not None:
+                        data.append(d)
+            else:
+                d = _get_data(adata, attr, key, opt)
+                if d is not None:
+                    data.append(d)
 
         with open(os.path.join(self.dir, fname), 'wb') as fout:
             pickle.dump(data, fout)
