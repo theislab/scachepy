@@ -34,16 +34,51 @@ class Module(ABC):
                 kwargs['ext'] = self._extensions.get(backend, '.scdata')
             self._backend = backend_type(**kwargs)
 
+        self.verbose = True
+        self.force = False
+
         for k, fn in self._functions.items():
             setattr(self, k, fn)
 
     @property
     def backend(self):
+        '''
+        The backend for this module.
+        '''
+
         return self._backend
 
     @backend.setter
     def backend(self, _):
-        raise RuntimeError('Setting backend is disallowed. To change the directory, try `dir` attribute of `backend.`')
+        raise RuntimeError('Setting backend is disallowed. To change the directory, try `dir` attribute of `backend`.')
+
+    @property
+    def verbose(self):
+        '''
+        Verbosity level for this module.
+        Overriden by `verbose=...` when explictly specified during the function call.
+        '''
+
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, val):
+        assert isinstance(val, bool), f'Value must be of type `bool`, found `{type(val).__name__}`.'
+        self._verbose = val
+
+    @property
+    def force(self):
+        '''
+        Whether to force computation for this module.
+        Overriden by `force=...` when explictly specified during the function call.
+        '''
+
+        return self._force
+
+    @force.setter
+    def force(self, val):
+        assert isinstance(val, bool), f'Value must be of type `bool`, found `{type(val).__name__}`.'
+        self._force = val
 
     def _clear(self, verbose=1, *, separator=None):
         self.backend._clear(verbose, self._type, separator=separator)
@@ -152,8 +187,8 @@ class Module(ABC):
 
         def wrapper(*args, **kwargs):
             fname = kwargs.pop('fname', None)
-            force = kwargs.pop('force', False)
-            verbose = kwargs.pop('verbose', True)
+            force = kwargs.pop('force') if 'force' in kwargs else self.force 
+            verbose = kwargs.pop('verbose') if 'verbose' in kwargs else self.verbose
             call = kwargs.pop('call', True)  # if we do not wish to call the callback
             skip = kwargs.pop('skip', False)
             # resolver of ambigous matches
@@ -364,8 +399,8 @@ class PlModule(Module):
                                    default_fname=f'{fn.__name__}_plot',
                                    default_fn=plotting_wrapper(fn),
                                    is_plot=True)
-
-            for fn in filter(lambda fn: np.in1d(['return_fig', 'save'],  # only this works (wanted to  have with 'show')
+            # only this works (wanted to have with 'show')
+            for fn in filter(lambda fn: np.in1d(['return_fig', 'save'],
                                                 list(signature(fn).parameters.keys())).any(),
                              filter(callable, map(lambda name: getattr(sc.pl, name), dir(sc.pl))))
         }
