@@ -42,7 +42,8 @@ class Cache:
 
         if self._separate_dirs:
             for where, Mod in zip(['pp', 'tl', 'pl'], [PpModule, TlModule, PlModule]):
-                setattr(self, where, Mod(backend, dirname=os.path.join(self._root_dir, where), ext=self._ext, cache=self))
+                setattr(self, where, Mod(backend, dirname=os.path.join(self._root_dir, where),
+                        ext=self._ext, cache=self))
         else:
             # shared backend
             self._backend = backend_type(root_dir, self._ext, cache=self)
@@ -57,6 +58,44 @@ class Cache:
     @root_dir.setter
     def root_dir(self, dir):
         raise RuntimeError('Setting root directory is disallowed.')
+
+    def verbose(self, val):
+        '''
+        Set the verbosity level for all modules.
+        For module-specific behavior, use `c.<module>.verbose = ...`.
+
+        Params
+        -------
+        val: Bool
+            whether to be verbose
+
+        Returns
+        -------
+        None
+        '''
+
+        self.pp.verbose = val
+        self.tl.verbose = val
+        self.pl.verbose = val
+
+    def force(self, val):
+        '''
+        Set whether to force computation for all modules.
+        For module-specific behavior, use `c.<module>.force = ...`.
+        
+        Params
+        -------
+        val: Union[Bool, NoneType]
+            whether to force the computation of values
+
+        Returns
+        -------
+        None
+        '''
+
+        self.pp.force = val
+        self.tl.force = val
+        self.pl.force = val
 
     def clear(self, verbose=1):
         if not self._separate_dirs:
