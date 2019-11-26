@@ -86,7 +86,7 @@ class PickleBackend(Backend):
                 if not hasattr(adata, attr):
                     if attr == 'obsm': shape = (adata.n_obs, )
                     elif attr == 'varm': shape = (adata.n_vars, )
-                    else: raise AttributeError('Support only for `.varm` and `.obsm` attributes.')
+                    else: raise AttributeError('Supported are only `.varm` and `.obsm` attributes.')
 
                     assert len(keys) == 1, 'Multiple keys not allowed in this case.'
                     setattr(adata, attr, np.empty(shape))
@@ -102,18 +102,19 @@ class PickleBackend(Backend):
                         msg.append(f'[\'{k}\']')
 
                     if verbose and key[-1] in at.keys():
-                        print(f'Warning: `{"".join(msg)}` already contains key: `\'{key[-1]}\'`.')
+                        print(f'`{"".join(msg)}` already contains key: `\'{key[-1]}\'`.')
 
                     at[key[-1]] = val
                 else:
                     if verbose and hasattr(adata, attr):
-                        print(f'Warning: `adata.{attr}` already exists.')
+                        print(f'`adata.{attr}` already exists.')
 
                     setattr(adata, attr, val)
 
         return True
 
-    def save(self, adata, fname, attrs, keys, *args, keyhint=None, **kwargs):
+    def save(self, adata, fname, attrs, keys, *args,
+             keyhint=None, watcher_keys={}, watchers={}, **kwargs):
         
         # value not found from _get_val
         sentinel = object()
@@ -142,9 +143,11 @@ class PickleBackend(Backend):
 
             return obj
 
-        def _convert_key(attr, key, optional):
+        def _convert_key(attr, key, watcher_key, optional):
+            watched_keys = watchers.get(watcher_key, {})
+
             if key is None or isinstance(key, str):
-                return key, False
+                return watched_keys.get(key, key), False
 
             if isinstance(key, re._pattern_type):
                 km = {key.match(k).groups()[0]:k for k in getattr(adata, attr).keys() if key.match(k) is not None}
@@ -171,6 +174,8 @@ class PickleBackend(Backend):
                     return tuple(km.values())[0], False
 
                 if len(res) != 1:
+                    mapped_key, all_failed = _map_watched_keys(watched_keys, res)
+
                     assert keyhint is not None, \
                                 f'Found ambiguous matches for `{key}` in `adata.{attr}`: `{res}`. ' \
                                 'Try specifying `keyhint=\'...\'` to filter them out.'
@@ -186,9 +191,16 @@ class PickleBackend(Backend):
                 return km[res.pop()], False
 
             assert isinstance(key, Iterable)
+            key, _ = _map_watched_keys(watcher_key, key),
 
-            # converting to tuple because it's hashable
-            return tuple(key), False
+            return key, False
+
+        def _map_watched_keys(watched_keys, keys):
+            if not isinstance(keys, (tuple, list)):
+                keys = (keys, )
+
+            res = tuple(watched_keys[k] for k in keys if k in watched_keys)
+            return res, len(res) > 0
 
         def _get_data(adata, attr, key, opt):
             value = _get_val(getattr(adata, attr), key, opt)
@@ -208,14 +220,15 @@ class PickleBackend(Backend):
         is_optional = kwargs.get('is_optional', [False] * len(attrs))
 
         data = []
-        for attr, key, opt in zip(attrs, keys, is_optional):
+        # watcher_key is just like attr, but without _opt _cache stripped
+        for attr, key, watcher_key, opt in zip(attrs, keys, watcher_keys, is_optional):
             if not hasattr(adata, attr):
                 if opt:
                     continue
-                raise AttributeError(f'`adata` object has no attribute `{attr}` and'
-                                      ' was not specified as optional.')
+                raise AttributeError(f'`adata` object has no attribute `{attr}` and '
+                                      'it was not specified as optional.')
 
-            key, check_for_mul_keys = _convert_key(attr, key, opt)
+            key, check_for_mul_keys = _convert_key(attr, key, watcher_key, opt)
             if key is sentinel:  # optional key not found
                 continue
             elif check_for_mul_keys:  # keyhint returned multiple

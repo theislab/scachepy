@@ -94,7 +94,8 @@ class Module(ABC):
 
     def _create_cache_fn(self, *args, default_fname=None):
 
-        def wrapper(adata, fname=None, recache=False, verbose=True, skip=False, keyhint=None, *args, **kwargs):
+        def wrapper(adata, fname=None, recache=False, verbose=True,
+                    skip=False, keyhint=None, watchers={}, *args, **kwargs):
             try:
                 if fname is None:
                     fname = default_fname
@@ -106,14 +107,16 @@ class Module(ABC):
 
                     return self.backend.save(adata, fname, attrs, keys,
                                              skip=skip, is_optional=is_optional,
-                                             keyhint=keyhint,
+                                             keyhint=keyhint, watchers=watchers,
+                                             watcher_keys=watcher_keys,
                                              possible_vals=possible_vals, verbose=verbose)
 
                 if (self.backend.dir / fname).is_file():
                     if verbose:
                         print(f'Loading data from: `{fname}`.')
 
-                    return self.backend.load(adata, fname, verbose=verbose, skip=skip)
+                    return self.backend.load(adata, fname, watchers=watchers,
+                                             verbose=verbose, skip=skip)
 
                 return False
 
@@ -150,6 +153,7 @@ class Module(ABC):
 
         # strip the postfix
         pat = re.compile(r'(:?_opt)|(?:_cache\d+)')
+        watcher_keys = attrs  # needed for watchers
         attrs = tuple(pat.sub('', a) for a in attrs)
 
         return wrapper
@@ -185,6 +189,18 @@ class Module(ABC):
             the `callable` either needs to return an `anndata.AnnData` object
             (if `copy=True`) or just modify it inplace
         '''
+
+        def get_watchers(callback):
+            try:
+                sig = signature(c)
+                bound = sig.bind(*args, **kwargs)
+                bound.apply_defaults()
+
+                return {v[0]:{v[1]:bound.arguments[k]}
+                        for k, v in watchers.items() if k in bound.arguments}
+
+            except TypeError:
+                return {}
 
         def wrapper(*args, **kwargs):
             fname = kwargs.pop('fname', None)
@@ -236,7 +252,8 @@ class Module(ABC):
                 if not call:
                     warnings.warn('Specifying `call=False` and `force=True` still forces the computation.')
                 res = callback(*args, **kwargs)
-                ret = cache_fn(res if copy else adata, fname, True, verbose, skip, keyhint, *args, **kwargs)
+                ret = cache_fn(res if copy else adata, fname, True, verbose,
+                               skip, keyhint, watchers, *args, **kwargs)
                 assert ret, 'Caching failed, horribly.'
 
                 if is_plot:
@@ -255,13 +272,14 @@ class Module(ABC):
 
             # we need to pass the *args and **kwargs in order to
             # get the right field when using regexes
-            if not cache_fn(adata, fname, False, verbose, skip, keyhint, *args, **kwargs):
+            if not cache_fn(adata, fname, False, verbose, skip, keyhint, watchers, *args, **kwargs):
                 if verbose:
                     f = fname if fname is not None else def_fname
                     print(f'No cache found in `{str(f) + self.backend.ext}`, ' + ('computing values.' if call else 'searching for values.'))
 
                 res = callback(*args, **kwargs) if call else adata if copy else None
-                ret = cache_fn(res if copy else adata, fname, True, False, skip, keyhint, *args, **kwargs)
+                ret = cache_fn(res if copy else adata, fname, True, False,
+                               skip, keyhint, watchers, *args, **kwargs)
                 assert ret, 'Caching failed, horribly.'
 
                 if is_plot:
@@ -294,6 +312,10 @@ class Module(ABC):
         def_fname = kwargs.get('default_fname', None)  # keep in in kwargs
         def_keyhint = kwargs.pop('default_keyhint', None)
         default_fn = kwargs.pop('default_fn', lambda *_x, **_y: None)
+
+        # watchers can't be done in _create_cache_fn,
+        # because the callback is dynamic as well
+        watchers = kwargs.pop('watchers', {})
         is_plot = kwargs.pop('is_plot', False)  # plotting fuctions are treated as special
 
         cache_fn = self._create_cache_fn(*args, **kwargs)
