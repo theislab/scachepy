@@ -107,16 +107,17 @@ class Module(ABC):
 
                     return self.backend.save(adata, fname, attrs, keys,
                                              skip=skip, is_optional=is_optional,
-                                             keyhint=keyhint, watchers=watchers,
+                                             keyhint=keyhint,
                                              watcher_keys=watcher_keys,
+                                             watchers=watchers,
                                              possible_vals=possible_vals, verbose=verbose)
 
                 if (self.backend.dir / fname).is_file():
                     if verbose:
                         print(f'Loading data from: `{fname}`.')
 
-                    return self.backend.load(adata, fname, watchers=watchers,
-                                             verbose=verbose, skip=skip)
+                    # TODO: watchers for backend? is it reasonable?
+                    return self.backend.load(adata, fname, verbose=verbose, skip=skip)
 
                 return False
 
@@ -152,7 +153,7 @@ class Module(ABC):
         is_optional = tuple(pat.match(a) is not None for a in attrs)
 
         # strip the postfix
-        pat = re.compile(r'(:?_opt)|(?:_cache\d+)')
+        pat = re.compile(r'(?:_opt)|(?:_cache\d+)')
         watcher_keys = attrs  # needed for watchers
         attrs = tuple(pat.sub('', a) for a in attrs)
 
@@ -190,14 +191,14 @@ class Module(ABC):
             (if `copy=True`) or just modify it inplace
         '''
 
-        def get_watchers(callback):
+        def get_watchers(callback, *args, **kwargs):
             try:
-                sig = signature(c)
+                sig = signature(callback)
                 bound = sig.bind(*args, **kwargs)
                 bound.apply_defaults()
 
-                return {v[0]:{v[1]:bound.arguments[k]}
-                        for k, v in watchers.items() if k in bound.arguments}
+                return {k:{v:bound.arguments[v]
+                        for v in vs if v in bound.arguments} for k, vs in watchers_.items()}
 
             except TypeError:
                 return {}
@@ -245,6 +246,8 @@ class Module(ABC):
                     raise RuntimeError('No callback specified and default is None; specify it as a 1st argument. ')
                 callback = default_fn
                 assert callable(callback), f'Function `{callback}` is not callable.'
+
+            watchers = get_watchers(callback, *args, **kwargs)
 
             if force:
                 if verbose:
@@ -315,7 +318,7 @@ class Module(ABC):
 
         # watchers can't be done in _create_cache_fn,
         # because the callback is dynamic as well
-        watchers = kwargs.pop('watchers', {})
+        watchers_ = kwargs.pop('watchers', {})
         is_plot = kwargs.pop('is_plot', False)  # plotting fuctions are treated as special
 
         cache_fn = self._create_cache_fn(*args, **kwargs)
@@ -359,7 +362,8 @@ class TlModule(Module):
     def __init__(self, backend, **kwargs):
         self._type = 'tl'
         self._functions = {
-            'louvain': self.cache(dict(obs='louvain'),
+            'louvain': self.cache(dict(obs=re.compile(r'(?P<key_added>.*)')),
+                                  watchers=dict(obs=['key_added']),
                                   default_fname='louvain',
                                   default_fn=sc.tl.louvain),
             'tsne': self.cache(dict(obsm='X_tsne'),
@@ -376,8 +380,12 @@ class TlModule(Module):
             'paga': self.cache(dict(uns='paga'),
                                default_fn=sc.tl.paga,
                                default_fname='paga'),
-            'embedding_density': self.cache(dict(obs=re.compile(r'(.+_density_?.*)'),
-                                                 uns=re.compile(r'(.+_density_.*params$)')),
+            'embedding_density': self.cache(dict(obs=re.compile(r'(?P<basis>.+)_density_?(?P<groupby>.*)'),
+                                                 # don't do greede groupby and since users can be evil
+                                                 # don't use [^_]*
+                                                 uns=re.compile(r'(?P<basis>.+)_density_(?P<groupby>.*?)_?params')),
+                                            watchers=dict(obs=['basis', 'groupby'],
+                                                          uns=['basis', 'groupby']),
                                             default_fn=sc.tl.embedding_density,
                                             default_fname='embedding_density'),
             'velocity': self.cache(dict(var='velocity_gamma',

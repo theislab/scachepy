@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from collections import Iterable
+from collections import Iterable, defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -144,14 +144,28 @@ class PickleBackend(Backend):
             return obj
 
         def _convert_key(attr, key, watcher_key, optional):
-            watched_keys = watchers.get(watcher_key, {})
 
             if key is None or isinstance(key, str):
-                return watched_keys.get(key, key), False
+                return key, False
 
             if isinstance(key, re._pattern_type):
-                km = {key.match(k).groups()[0]:k for k in getattr(adata, attr).keys() if key.match(k) is not None}
-                res = set(km.keys()) & possible_vals
+                km = {k:key.match(k) for k in getattr(adata, attr).keys() if key.match(k) is not None}
+
+                candidates = []
+                watched_keys = watchers.get(watcher_key, {})
+
+                for candidate, match in km.items():
+                    groups = defaultdict(lambda: sentinel,
+                                         {k:None if v == '' else v
+                                          for k, v in match.groupdict().items()})
+
+                    if all(groups[k] == v for k, v in watched_keys.items()):
+                        candidates.append(candidate)
+
+                if candidates:
+                    return tuple(candidates), True
+
+                res = set(map(lambda m: m.group(), km.values())) & possible_vals
 
                 if len(res) == 0:
                     # default value was not specified during the call
@@ -161,39 +175,36 @@ class PickleBackend(Backend):
                     # found multiple matching keys
                     if len(km) != 1:
                         assert keyhint is not None, \
-                                f'Found ambiguous matches for `{key}` in `adata.{attr}`: `{set(km.values())}`. ' \
+                                f'Found ambiguous matches for `{key}` in `adata.{attr}`: `{set(km.keys())}`. ' \
                                 'Try specifying `keyhint=\'...\'` to filter them out.'
 
                         # resolve by keyhint
-                        filter_fn = (lambda v: keyhint.match(v) is not None) \
-                                if isinstance(keyhint, re._pattern_type) else (lambda v: all(k in v for k in keyhint)) \
-                                if isinstance(keyhint, (tuple, list)) else (lambda v: keyhint in v)
-                        return tuple(v for v in km.values() if filter_fn(v)), True
+                        filter_fn = (lambda k: keyhint.match(k) is not None) \
+                                if isinstance(keyhint, re._pattern_type) else (lambda ks: all(k in ks for k in keyhint)) \
+                                if isinstance(keyhint, (tuple, list)) else (lambda k: keyhint in k)
+                        return tuple(k for k in km.keys() if filter_fn(k)), True
 
                     # only 1 value
-                    return tuple(km.values())[0], False
+                    return tuple(km.keys())[0], False
 
                 if len(res) != 1:
-                    mapped_key, all_failed = _map_watched_keys(watched_keys, res)
-
                     assert keyhint is not None, \
                                 f'Found ambiguous matches for `{key}` in `adata.{attr}`: `{res}`. ' \
                                 'Try specifying `keyhint=\'...\'` to filter them out.'
 
                     # resolve by keyhint
-                    filter_fn = (lambda v: keyhint.match(v) is not None) \
-                            if isinstance(keyhint, re._pattern_type) else (lambda v: all(k in v for k in keyhint)) \
-                            if isinstance(keyhint, (tuple, list)) else (lambda v: keyhint in v)
+                    filter_fn = (lambda k: keyhint.match(k) is not None) \
+                            if isinstance(keyhint, re._pattern_type) else (lambda ks: all(k in ks for k in keyhint)) \
+                            if isinstance(keyhint, (tuple, list)) else (lambda k: keyhint in k)
 
-                    return tuple(v for v in km.values() if filter_fn(v)), True
+                    return tuple(k for k in km.keys() if filter_fn(k)), True
 
                 # only 1 value
                 return km[res.pop()], False
 
             assert isinstance(key, Iterable)
-            key, _ = _map_watched_keys(watcher_key, key),
 
-            return key, False
+            return tuple(key), False
 
         def _map_watched_keys(watched_keys, keys):
             if not isinstance(keys, (tuple, list)):
@@ -220,7 +231,7 @@ class PickleBackend(Backend):
         is_optional = kwargs.get('is_optional', [False] * len(attrs))
 
         data = []
-        # watcher_key is just like attr, but without _opt _cache stripped
+        # watcher_key is just like attr, but without _opt or _cache stripped
         for attr, key, watcher_key, opt in zip(attrs, keys, watcher_keys, is_optional):
             if not hasattr(adata, attr):
                 if opt:
