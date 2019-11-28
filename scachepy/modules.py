@@ -399,7 +399,7 @@ class TlModule(Module):
                                               uns_cache2=re.compile(r'(?P<vkey>.*)_self_transition')),
                                          watchers=dict(uns=['vkey'],
                                                        uns_cache1=['vkey'],
-                                                       uns_cache1=['vkey']),
+                                                       uns_cache2=['vkey']),
                                          default_fn=scv.tl.velocity_graph,
                                          default_fname='velo_graph'),
             'velocity_embedding': self.cache(dict(obsm=re.compile(r'(?P<vkey>.*)_(?P<basis>.*)')),
