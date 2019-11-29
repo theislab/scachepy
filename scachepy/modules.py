@@ -380,26 +380,34 @@ class TlModule(Module):
             'paga': self.cache(dict(uns='paga'),
                                default_fn=sc.tl.paga,
                                default_fname='paga'),
-            'embedding_density': self.cache(dict(obs=re.compile(r'(?P<basis>.+)_density_?(?P<groupby>.*)'),
+            'embedding_density': self.cache(dict(obs=re.compile(r'(?P<basis>.*)_density_?(?P<groupby>.*)'),
                                                  # don't do greede groupby and since users can be evil
                                                  # don't use [^_]*
-                                                 uns=re.compile(r'(?P<basis>.+)_density_(?P<groupby>.*?)_?params')),
+                                                 uns=re.compile(r'(?P<basis>.*)_density_(?P<groupby>.*?)_?params')),
                                             watchers=dict(obs=['basis', 'groupby'],
                                                           uns=['basis', 'groupby']),
                                             default_fn=sc.tl.embedding_density,
                                             default_fname='embedding_density'),
-            'velocity': self.cache(dict(var='velocity_gamma',
-                                        var_cache1='velocity_r2',
-                                        var_cache2='velocity_genes',
-                                        layers='velocity'),
+            'velocity': self.cache(dict(var_opt=re.compile('(?P<vkey>.*)_genes'), # dyn
+                                        layers=re.compile('(?P<vkey>.*)'),  # all
+                                        layers_opt_cache1=re.compile('(?P<vkey>.*)_u'), # dyn
+                                        layers_opt_cache2=re.compile('variance_(?P<vkey>.*)'),  # stoch, ...
+                                        **{f'var_opt_cache{i}': re.compile(rf'(?P<vkey>.*)_{name}_?.*')
+                                           for i, name in enumerate(['offset', 'offset2', 'beta',
+                                                                     'gamma', 'r2', 'genes'])}),
+                                   watchers=dict(var_opt=['vkey'], layers=['vkey'],
+                                                 layers_opt_cache1=['vkey'], layers_opt_cache2=['vkey'],
+                                                 **{f'var_opt_cache_{i}': ['vkey']
+                                                    for i, name in enumerate(['offset', 'offset2', 'beta',
+                                                                              'gamma', 'r2', 'genes'])}),
                                    default_fn=scv.tl.velocity,
                                    default_fname='velo'),
             'velocity_graph': self.cache(dict(uns=re.compile(r'(?P<vkey>.*)_graph'),
                                               uns_cache1=re.compile(r'(?P<vkey>.*)_graph_neg'),
-                                              uns_cache2=re.compile(r'(?P<vkey>.*)_self_transition')),
+                                              obs=re.compile(r'(?P<vkey>.*)_self_transition')),
                                          watchers=dict(uns=['vkey'],
                                                        uns_cache1=['vkey'],
-                                                       uns_cache2=['vkey']),
+                                                       obs=['vkey']),
                                          default_fn=scv.tl.velocity_graph,
                                          default_fname='velo_graph'),
             'velocity_embedding': self.cache(dict(obsm=re.compile(r'(?P<vkey>.*)_(?P<basis>.*)')),
