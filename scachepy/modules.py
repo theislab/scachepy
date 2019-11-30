@@ -103,14 +103,12 @@ class Module(ABC):
                     fname += self.backend.ext
 
                 if recache:
-                    possible_vals = set(args) | set(kwargs.values())
-
                     return self.backend.save(adata, fname, attrs, keys,
                                              skip=skip, is_optional=is_optional,
                                              keyhint=keyhint,
                                              watcher_keys=watcher_keys,
                                              watchers=watchers,
-                                             possible_vals=possible_vals, verbose=verbose)
+                                             verbose=verbose)
 
                 if (self.backend.dir / fname).is_file():
                     if verbose:
@@ -197,8 +195,16 @@ class Module(ABC):
                 bound = sig.bind(*args, **kwargs)
                 bound.apply_defaults()
 
-                return {k:{v:bound.arguments[v]
-                        for v in vs if v in bound.arguments} for k, vs in watchers_.items()}
+                res = {}
+                for k, vs in watchers_.items():
+                    tmp = {}
+                    for v in vs:
+                        v, *const = v.split(':')
+                        if v in bound.arguments:
+                            tmp[v] = const[0] if const and bound.arguments[v] is not None else bound.arguments[v]
+                    res[k] = tmp
+
+                return res
 
             except TypeError:
                 return {}
@@ -362,8 +368,8 @@ class TlModule(Module):
     def __init__(self, backend, **kwargs):
         self._type = 'tl'
         self._functions = {
-            'louvain': self.cache(dict(obs=re.compile(r'(?P<key_added>.*)')),
-                                  watchers=dict(obs=['key_added']),
+            'louvain': self.cache(dict(obs=re.compile(r'(?P<key_added>.*?)(?P<restrict_to>_R)?$')),
+                                  watchers=dict(obs=['key_added', 'restrict_to:_R']),
                                   default_fname='louvain',
                                   default_fn=sc.tl.louvain),
             'tsne': self.cache(dict(obsm='X_tsne'),

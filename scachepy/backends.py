@@ -159,35 +159,23 @@ class PickleBackend(Backend):
                                          {k:None if v == '' else v
                                           for k, v in match.groupdict().items()})
 
-                    if all(groups[k] == v for k, v in watched_keys.items()):
+                    if all(v == groups[k] for k, v in watched_keys.items()):
                         candidates.append(candidate)
 
-                if candidates:
+                if len(candidates):
+                    # here we allow multiple keys
                     return tuple(candidates), True
 
-                res = set(map(lambda m: m.group(), km.values())) & possible_vals
-
-                if len(res) == 0:
+                if len(km) == 0:
                     # default value was not specified during the call
-                    if len(km) == 0 and optional:
+                    if optional:
                         return sentinel, False
 
                     # found multiple matching keys
-                    if len(km) != 1:
-                        assert keyhint is not None, \
-                                f'Found ambiguous matches for `{key}` in `adata.{attr}`: `{set(km.keys())}`. ' \
-                                'Try specifying `keyhint=\'...\'` to filter them out.'
+                    raise RuntimeError(f'Found no matches for `{key}` in `adata.{attr}`.')
 
-                        # resolve by keyhint
-                        filter_fn = (lambda k: keyhint.match(k) is not None) \
-                                if isinstance(keyhint, re._pattern_type) else (lambda ks: all(k in ks for k in keyhint)) \
-                                if isinstance(keyhint, (tuple, list)) else (lambda k: keyhint in k)
-                        return tuple(k for k in km.keys() if filter_fn(k)), True
-
-                    # only 1 value
-                    return tuple(km.keys())[0], False
-
-                if len(res) != 1:
+                if len(km) != 1:
+                    res = list(set(map(lambda m: m.group(), km.values())))
                     assert keyhint is not None, \
                                 f'Found ambiguous matches for `{key}` in `adata.{attr}`: `{res}`. ' \
                                 'Try specifying `keyhint=\'...\'` to filter them out.'
@@ -200,7 +188,7 @@ class PickleBackend(Backend):
                     return tuple(k for k in km.keys() if filter_fn(k)), True
 
                 # only 1 value
-                return km[res.pop()], False
+                return next(iter(km.keys())), False
 
             assert isinstance(key, Iterable)
 
@@ -227,7 +215,6 @@ class PickleBackend(Backend):
 
         verbose = kwargs.get('verbose', False)
         skip_not_found = kwargs.get('skip', False)
-        possible_vals = kwargs.get('possible_vals', {})
         is_optional = kwargs.get('is_optional', [False] * len(attrs))
 
         data = []
