@@ -199,9 +199,15 @@ class Module(ABC):
                 for k, vs in watchers_.items():
                     tmp = {}
                     for v in vs:
-                        v, *const = v.split(':')
-                        if v in bound.arguments:
-                            tmp[v] = const[0] if const and bound.arguments[v] is not None else bound.arguments[v]
+                        if '<' in v:
+                            v, default = v.split('<')
+                            # in case args change
+                            # if v in bound.arguments:
+                            tmp[v] = default if bound.arguments[v] is None else bound.arguments[v]
+                        else:
+                            v, *default= v.split('>')
+                            # if v in bound.arguments:
+                            tmp[v] = default[0] if const and bound.arguments[v] is not None else bound.arguments[v] 
                     res[k] = tmp
 
                 return res
@@ -368,8 +374,12 @@ class TlModule(Module):
     def __init__(self, backend, **kwargs):
         self._type = 'tl'
         self._functions = {
+            'rank_genes_groups': self.cache(dict(uns=re.compile(rf'(?P<key_added>.*)')),
+                                            watchers=dict(uns=['key_added<rank_genes_groups']),
+                                            default_fn=sc.tl.rank_genes_groups,
+                                            default_fname='rank_genes_groups'),
             'louvain': self.cache(dict(obs=re.compile(r'(?P<key_added>.*?)(?P<restrict_to>_R)?$')),
-                                  watchers=dict(obs=['key_added', 'restrict_to:_R']),
+                                  watchers=dict(obs=['key_added', 'restrict_to>_R']),
                                   default_fname='louvain',
                                   default_fn=sc.tl.louvain),
             'tsne': self.cache(dict(obsm='X_tsne'),
