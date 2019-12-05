@@ -207,7 +207,7 @@ class Module(ABC):
                         else:
                             v, *default= v.split('>')
                             # if v in bound.arguments:
-                            tmp[v] = default[0] if const and bound.arguments[v] is not None else bound.arguments[v] 
+                            tmp[v] = default[0] if default and bound.arguments[v] is not None else bound.arguments[v] 
                     res[k] = tmp
 
                 return res
