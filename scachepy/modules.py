@@ -370,7 +370,10 @@ class PpModule(Module):
                                   default_fname='combat'),
              'regress_out': self.pp.cache(dict(X=None),
                                           default_fn=sc.pp.regress_out,
-                                          default_fname='regress_out')
+                                          default_fname='regress_out'),
+             'scale': self.pp.cache(dict(X=None),
+                                    default_fn=sc.pp.scale,
+                                    default_fname='scale')
         }
         super().__init__(backend, **kwargs)
 
