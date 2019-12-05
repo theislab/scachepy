@@ -4,6 +4,7 @@ from collections import Iterable
 from abc import ABC
 from inspect import signature
 from PIL import Image
+from random import randint
 
 import scvelo as scv
 import scanpy as sc
@@ -199,7 +200,15 @@ class Module(ABC):
                 for k, vs in watchers_.items():
                     tmp = {}
                     for v in vs:
-                        if '<' in v:
+                        to_ignore = None
+                        if '!' in v:
+                            v, to_ignore = v.split('!')
+
+                        # TODO: this is hacky and ugly, refactor
+                        # ignore if default/not specified
+                        if to_ignore is not None and v not in kwargs:
+                            tmp[to_ignore] = f'IGNORE_{randint(0, 128)}'
+                        elif '<' in v:
                             v, default = v.split('<')
                             # in case args change
                             # if v in bound.arguments:
@@ -369,11 +378,11 @@ class PpModule(Module):
                                   default_fn=sc.pp.combat,
                                   default_fname='combat'),
              'regress_out': self.cache(dict(X=None),
-                                          default_fn=sc.pp.regress_out,
-                                          default_fname='regress_out'),
+                                          default_fname='regress_out',
+                                          default_fn=sc.pp.regress_out),
              'scale': self.cache(dict(X=None),
-                                    default_fn=sc.pp.scale,
-                                    default_fname='scale')
+                                    default_fname='scale',
+                                    default_fn=sc.pp.scale)
         }
         super().__init__(backend, **kwargs)
 
@@ -409,6 +418,22 @@ class TlModule(Module):
             'paga': self.cache(dict(uns='paga'),
                                default_fn=sc.tl.paga,
                                default_fname='paga'),
+            # this is a bit overkill, but I want to save the extra info only for
+            # `n_branchings` > 0
+            # TODO: refactor
+            'dpt': self.cache(dict(obs='dpt_pseudotime',
+                                   obs_opt_cache1=re.compile(rf'^dpt_groups$'),
+                                   obs_opt_cache2=re.compile(rf'^dpt_order$'),
+                                   obs_opt_cache3=re.compile(rf'^dpt_order_indices$'),
+                                   uns_opt_cache1=re.compile(rf'^dpt_changepoints$'),
+                                   uns_opt_cache2=re.compile(rf'^dpt_grouptips$')),
+                              watchers=dict(obs_opt_cache1=['n_branchings!dpt_groups'],
+                                            obs_opt_cache2=['n_branchings!dpt_order'],
+                                            obs_opt_cache3=['n_branchings!dpt_order_indices'],
+                                            uns_opt_cache1=['n_branchings!dpt_changepoints'],
+                                            uns_opt_cache2=['n_branchings!dpt_grouptips']),
+                              default_fn=sc.tl.dpt,
+                              default_fname='dpt'),
             'embedding_density': self.cache(dict(obs=re.compile(r'(?P<basis>.*)_density_?(?P<groupby>.*)'),
                                                  # don't do greede groupby and since users can be evil
                                                  # don't use [^_]*

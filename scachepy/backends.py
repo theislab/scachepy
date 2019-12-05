@@ -165,6 +165,9 @@ class PickleBackend(Backend):
                 if len(candidates):
                     # here we allow multiple keys
                     return tuple(candidates), True
+                elif optional and all((v if isinstance(v, str) else 'DUMMY').startswith('IGNORE')
+                        for v in watched_keys.values()):
+                    return sentinel, False
 
                 if len(km) == 0:
                     # default value was not specified during the call
@@ -176,6 +179,9 @@ class PickleBackend(Backend):
 
                 if len(km) != 1:
                     res = list(set(map(lambda m: m.group(), km.values())))
+                    if len(res) == 1:
+                        return res[0], False
+
                     assert keyhint is not None, \
                                 f'Found ambiguous matches for `{key}` in `adata.{attr}`: `{res}`. ' \
                                 'Try specifying `keyhint=\'...\'` to filter them out.'
