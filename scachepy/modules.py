@@ -368,10 +368,10 @@ class PpModule(Module):
              'combat': self.cache(dict(X=None),
                                   default_fn=sc.pp.combat,
                                   default_fname='combat'),
-             'regress_out': self.pp.cache(dict(X=None),
+             'regress_out': self.cache(dict(X=None),
                                           default_fn=sc.pp.regress_out,
                                           default_fname='regress_out'),
-             'scale': self.pp.cache(dict(X=None),
+             'scale': self.cache(dict(X=None),
                                     default_fn=sc.pp.scale,
                                     default_fname='scale')
         }
@@ -391,6 +391,10 @@ class TlModule(Module):
                                   watchers=dict(obs=['key_added', 'restrict_to>_R']),
                                   default_fname='louvain',
                                   default_fn=sc.tl.louvain),
+            'leiden': self.cache(dict(obs=re.compile(r'(?P<key_added>.*?)(?P<restrict_to>_R)?$')),
+                                 watchers=dict(obs=['key_added', 'restrict_to>_R']),
+                                 default_fname='leiden',
+                                 default_fn=sc.tl.leiden),
             'tsne': self.cache(dict(obsm='X_tsne'),
                                default_fname='tsne',
                                default_fn=sc.tl.tsne),
