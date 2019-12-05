@@ -364,7 +364,13 @@ class PpModule(Module):
                                default_fn=sc.pp.pca),
              'neighbors': self.cache(dict(uns='neighbors'),
                                      default_fname='neighs',
-                                     default_fn=sc.pp.neighbors)
+                                     default_fn=sc.pp.neighbors),
+             'combat': self.cache(dict(X=None),
+                                  default_fn=sc.pp.combat,
+                                  default_fname='combat'),
+             'regress_out': self.pp.cache(dict(X=None),
+                                          default_fn=sc.pp.regress_out,
+                                          default_fname='regress_out')
         }
         super().__init__(backend, **kwargs)
 
