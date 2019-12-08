@@ -3,3 +3,4 @@ setuptools>=41.0.1
 numpy>=1.16.4
 anndata>=0.6.22
 scvelo>=0.1.19
+compress_pickle==1.1.0

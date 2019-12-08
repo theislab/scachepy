@@ -10,7 +10,7 @@ pip install git+https://github.com/theislab/scachepy
 We recommend checking out the [tutorial notebook](./notebooks/scachepy_tutorial.ipynb). In essence, you can:
 ```python
 import scachepy
-c = scachepy.Cache(<directory>, separate_dirs=True) 
+c = scachepy.Cache(<directory>, separate_dirs=True, compression='lzma')
 
 # set verbosity level
 c.verbose(False)

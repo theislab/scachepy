@@ -3,6 +3,8 @@ from .backends import PickleBackend
 from .utils import *
 from pathlib import Path
 
+import compress_pickle as cpickle
+
 import os
 
 
@@ -10,35 +12,48 @@ class Cache:
 
     _backends = dict(pickle=PickleBackend)
     _extensions = dict(pickle='.pickle')
+    _compressions = cpickle.get_known_compressions()
 
     def __init__(self, root_dir, backend='pickle',
+                 compression=None,
                  ext=None, separate_dirs=False):
-        '''
+        f"""
         Params
         --------
         root_dir: Str
             path to directory where to save the files
         backend: Str, optional (default: `'pickle'`)
             which backend to use
+        compression: Str, optional (default: `'zip'`)
+            compression scheme to use, valid options are:
+            `{', '.join(map(str, self._compressions))}`
         ext: Str, optional (default: `None`)
             file extensions, defaults to '.pickle' for
             'pickle' backend; defaults to '.scdata' if non applicable
         seperate_dirs: Bool, optional (default: `True`)
             whether to create 'pp', 'tl' and 'pl' directories
             under the `root_dir`
-        '''
-
-        self._separate_dirs = separate_dirs
+        """
+        assert compression in self._compressions, 'Invalid compression type: `{compression}`. ' \
+            f'Valid options are: `{self._compressions}`.'
 
         backend_type = self._backends.get(backend, None)
         if backend_type is None:
-            raise ValueError(f'Unknown backend type: `{backend_type}`. Supported backends are: `{", ".join(self._backends.keys())}`.')
+            raise ValueError(f'Unknown backend type: `{backend_type}`. '
+                             'Supported backends are: `{", ".join(self._backends.keys())}`.')
+
+        self._separate_dirs = separate_dirs
 
         self._root_dir = os.path.expanduser(root_dir)
-        self._root_dir = Path(self._root_dir)#os.path.abspath(self._root_dir))
-        self._ext = ext if ext is not None else self._extensions.get(backend, '.scdata')
+        self._root_dir = Path(self._root_dir)
+
+        self._ext = ext if ext is not None else self._extensions.get(backend, '.scachepy')
         if not self._ext.startswith('.'):
-            self._ext = '.' + self._ext
+            self._ext = f'.{self._ext}'
+
+        self._compression = compression
+        if self._compression is not None and self._compression != 'pickle':
+            self._ext += f'.{self._compression}'
 
         if self._separate_dirs:
             for where, Mod in zip(['pp', 'tl', 'pl'], [PpModule, TlModule, PlModule]):
@@ -108,4 +123,5 @@ class Cache:
             self.pl._clear(verbose)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(root={self._root_dir}, ext='{self._ext}')"
+        return f"{self.__class__.__name__}(root={self._root_dir}, ext='{self._ext}', compression='{self._compression}')"
+
