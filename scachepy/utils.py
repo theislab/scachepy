@@ -175,3 +175,4 @@ def plotting_wrapper(fn):
         return np.fromstring(data, np.uint8).reshape((height, width, 4))
 
     return wrapper
+

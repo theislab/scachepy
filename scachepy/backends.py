@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import os
 import re
-import pickle
+import compress_pickle as cpickle
 import warnings
 
 
@@ -17,6 +17,7 @@ class Backend(ABC):
 
         self._dirname = Path(dirname)
         self._cache = cache
+        self._compression = cache._compression
         self.ext = ext
 
     def _clear(self, verbose=1, typp='all', separator=None):
@@ -60,7 +61,7 @@ class Backend(ABC):
         raise NotImplementedError
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(dir='{self.dir}', ext='{self.ext}')"
+        return f"{self.__class__.__name__}(dir='{self.dir}', ext='{self.ext}', compression='{self._comprssion}')"
 
 
 class PickleBackend(Backend):
@@ -70,7 +71,7 @@ class PickleBackend(Backend):
         verbose = kwargs.get('verbose', False)
 
         with open(os.path.join(self.dir, fname), 'rb') as fin:
-            attrs_keys, vals = zip(*pickle.load(fin))
+            attrs_keys, vals = zip(*cpickle.load(fin, compression=self._compression))
 
             for (attr, key), val in zip(attrs_keys, vals):
                 if val is None:
@@ -246,6 +247,7 @@ class PickleBackend(Backend):
                     data.append(d)
 
         with open(os.path.join(self.dir, fname), 'wb') as fout:
-            pickle.dump(data, fout)
+            cpickle.dump(data, fout, compression=self._compression)
 
         return True
+
