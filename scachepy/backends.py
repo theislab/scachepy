@@ -8,6 +8,10 @@ import re
 import compress_pickle as cpickle
 import warnings
 
+_pattern_type = re._pattern_type if hasattr(re, '_pattern_type') else re.Pattern if hasattr(re, 'Pattern') else None
+if _pattern_type is None:
+    raise RuntimeError('Unable to determine pattern type.')
+
 
 class Backend(ABC):
 
@@ -149,7 +153,7 @@ class PickleBackend(Backend):
             if key is None or isinstance(key, str):
                 return key, False
 
-            if isinstance(key, re._pattern_type):
+            if isinstance(key, _pattern_type):
                 km = {k:key.match(k) for k in getattr(adata, attr).keys() if key.match(k) is not None}
 
                 candidates = []
