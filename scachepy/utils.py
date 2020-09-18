@@ -1,6 +1,5 @@
 from PIL import Image
 from inspect import signature
-from abc import ABC
 
 import scanpy as sc
 import numpy as np
@@ -78,7 +77,7 @@ def wrap_as_adata(fn, *, ret_attr):
     return wrapper
 
 
-class FunctionWrapper():
+class FunctionWrapper:
 
     def __init__(self, wrapped, def_fn=None, assigned=functools.WRAPPER_ASSIGNMENTS):
         assert callable(wrapped), f'Function must be callable, but is of type `{type(wrapped)}`.'

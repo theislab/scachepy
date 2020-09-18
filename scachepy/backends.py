@@ -65,7 +65,7 @@ class Backend(ABC):
         raise NotImplementedError
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(dir='{self.dir}', ext='{self.ext}', compression='{self._comprssion}')"
+        return f"{self.__class__.__name__}(dir='{self.dir}', ext='{self.ext}', compression='{self._compression}')"
 
 
 class PickleBackend(Backend):
@@ -93,7 +93,7 @@ class PickleBackend(Backend):
                     elif attr == 'varm': shape = (adata.n_vars, )
                     else: raise AttributeError('Supported are only `.varm` and `.obsm` attributes.')
 
-                    assert len(keys) == 1, 'Multiple keys not allowed in this case.'
+                    assert len(key) == 1, 'Multiple keys not allowed in this case.'
                     setattr(adata, attr, np.empty(shape))
 
                 if key[0] is not None:
@@ -193,7 +193,7 @@ class PickleBackend(Backend):
 
                     # resolve by keyhint
                     filter_fn = (lambda k: keyhint.match(k) is not None) \
-                            if isinstance(keyhint, re._pattern_type) else (lambda ks: all(k in ks for k in keyhint)) \
+                            if isinstance(keyhint, _pattern_type) else (lambda ks: all(k in ks for k in keyhint)) \
                             if isinstance(keyhint, (tuple, list)) else (lambda k: keyhint in k)
 
                     return tuple(k for k in km.keys() if filter_fn(k)), True
@@ -204,13 +204,6 @@ class PickleBackend(Backend):
             assert isinstance(key, Iterable)
 
             return tuple(key), False
-
-        def _map_watched_keys(watched_keys, keys):
-            if not isinstance(keys, (tuple, list)):
-                keys = (keys, )
-
-            res = tuple(watched_keys[k] for k in keys if k in watched_keys)
-            return res, len(res) > 0
 
         def _get_data(adata, attr, key, opt):
             value = _get_val(getattr(adata, attr), key, opt)
@@ -224,7 +217,6 @@ class PickleBackend(Backend):
             return (attr, key), value
 
 
-        verbose = kwargs.get('verbose', False)
         skip_not_found = kwargs.get('skip', False)
         is_optional = kwargs.get('is_optional', [False] * len(attrs))
 

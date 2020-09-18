@@ -11,7 +11,6 @@ import scanpy as sc
 import anndata
 
 import numpy as np
-import matplotlib as mpl
 import re
 import traceback
 import warnings
@@ -176,7 +175,7 @@ class Module(ABC):
         default_fn: Callable, optional (default: `None`)
             function to call before caching the values
         default_keyhint: Str
-            when ambiguous matches occurr, save all values which have
+            when ambiguous matches occur, save all values which have
             `default_keyhint` inside
             overridable by `keyhint` when calling the function
 
@@ -211,12 +210,10 @@ class Module(ABC):
                         elif '<' in v:
                             v, default = v.split('<')
                             # in case args change
-                            # if v in bound.arguments:
                             tmp[v] = default if bound.arguments[v] is None else bound.arguments[v]
                         else:
-                            v, *default= v.split('>')
-                            # if v in bound.arguments:
-                            tmp[v] = default[0] if default and bound.arguments[v] is not None else bound.arguments[v] 
+                            v, *default = v.split('>')
+                            tmp[v] = default[0] if default and bound.arguments[v] is not None else bound.arguments[v]
                     res[k] = tmp
 
                 return res
@@ -435,7 +432,7 @@ class TlModule(Module):
                               default_fn=sc.tl.dpt,
                               default_fname='dpt'),
             'embedding_density': self.cache(dict(obs=re.compile(r'(?P<basis>.*)_density_?(?P<groupby>.*)'),
-                                                 # don't do greede groupby and since users can be evil
+                                                 # don't do greedy groupby and since users can be evil
                                                  # don't use [^_]*
                                                  uns=re.compile(r'(?P<basis>.*)_density_(?P<groupby>.*?)_?params')),
                                             watchers=dict(obs=['basis', 'groupby'],
@@ -482,15 +479,27 @@ class TlModule(Module):
                      varm_opt='loss',
                      # the keys are taken from the source file
                      # and var is optional, since it's still under development
-                     **{f'var_opt_cache{i}':re.compile(rf'(.+)_{name}$')
+                     **{f'var_opt_cache{i}': re.compile(rf'(.+)_{name}$')
                         for i, name in enumerate(['alpha', 'beta', 'gamma', 't_', 'scaling',
                                                   'std_u', 'std_s', 'likelihood', 'u0', 's0',
                                                   'pval_steady', 'steady_u', 'steady_s'])}),
-                 default_fn=scv.tl.recover_dynamics,
-                 default_fname='recover_dynamics',
-                 default_keyhint='fit'
-            )
+                default_fn=scv.tl.recover_dynamics,
+                default_fname='recover_dynamics',
+                default_keyhint='fit'
+            ),
         }
+
+        try:
+            import cellrank as cr
+            self._functions["transition_matrix"] = self.cache(
+                dict(obsp=re.compile(rf'(?P<key>.*)'), uns=re.compile(rf'(?P<key>.*)_params')),
+                watchers=dict(obsp=["key<T_fwd"], uns=["key<T_fwd"]),
+                default_fn=cr.tl.transition_matrix,
+                default_fname='transition_matrix',
+            )
+        except ImportError:
+            pass
+
         super().__init__(backend, **kwargs)
 
 
